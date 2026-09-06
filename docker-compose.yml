@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: pygrade-db
+    environment:
+      POSTGRES_USER: pygrade
+      POSTGRES_PASSWORD: pygrade_password
+      POSTGRES_DB: pygrade
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pygrade -d pygrade"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pygrade-backend
+    environment:
+      DATABASE_URL: postgresql://pygrade:pygrade_password@db:5432/pygrade
+      SECRET_KEY: change-me-in-production-super-secret-key-32chars
+      STORAGE_DIR: /app/storage
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/storage:/app/storage
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
