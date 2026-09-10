@@ -3,8 +3,8 @@ import uuid
 from decimal import Decimal
 from typing import List, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from sqlalchemy.orm import Session
 from app.ai_integrity.advisor import analyze_ai_heuristics, generate_grounded_feedback
+from app.ai_integrity.detector import get_ai_detection_service
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import get_current_lecturer
@@ -91,17 +91,17 @@ def process_single_submission(
     qm.ruff_violations = ruff_issues
     db.flush()
 
-    # 3. AI integrity heuristics & Grounded feedback
-    ai_heuristics = analyze_ai_heuristics(combined_code)
+    # 3. AI integrity detection & Grounded feedback
+    ai_detection = get_ai_detection_service().predict(combined_code)
     ai_sig = db.query(AIDetectionSignal).filter(AIDetectionSignal.submission_id == submission.id).first()
     if not ai_sig:
-        ai_sig = AIDetectionSignal(submission_id=submission.id, probability_score=ai_heuristics["probability_score"], confidence_tier=ai_heuristics["confidence_tier"])
+        ai_sig = AIDetectionSignal(submission_id=submission.id, probability_score=ai_detection["probability_score"], confidence_tier=ai_detection["confidence_tier"])
         db.add(ai_sig)
 
-    ai_sig.probability_score = ai_heuristics["probability_score"]
-    ai_sig.confidence_tier = ai_heuristics["confidence_tier"]
-    ai_sig.indicators = ai_heuristics["indicators"]
-    ai_sig.disclaimer = ai_heuristics["disclaimer"]
+    ai_sig.probability_score = ai_detection["probability_score"]
+    ai_sig.confidence_tier = ai_detection["confidence_tier"]
+    ai_sig.indicators = ai_detection["indicators"]
+    ai_sig.disclaimer = ai_detection["disclaimer"]
     db.flush()
 
     feedback_data = generate_grounded_feedback(
