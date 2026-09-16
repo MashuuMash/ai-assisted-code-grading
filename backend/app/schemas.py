@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.models import AssignmentStatus, UserRole
+from app.models import AssignmentStatus, GradingJobStatus, TestOutcome, TestVisibility, UserRole
 
 
 class UserBase(BaseModel):
@@ -155,4 +155,64 @@ class SubmissionResponse(BaseModel):
     sha256: str
     submitted_at: datetime
     student: UserResponse | None = None
+
+
+class TestCaseBase(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    visibility: TestVisibility = TestVisibility.PUBLIC
+    content: str = Field(min_length=1)
+
+
+class TestCaseCreate(TestCaseBase):
+    pass
+
+
+class TestCaseUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    visibility: TestVisibility | None = None
+    content: str | None = Field(default=None, min_length=1)
+
+
+class TestCaseResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    assignment_id: int
+    name: str
+    visibility: TestVisibility
+    content: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class TestResultResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    test_case_id: int
+    test_name: str
+    outcome: TestOutcome
+    duration_ms: int
+    failure_type: str | None = None
+    failure_detail: str | None = None
+
+
+class GradingJobResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    submission_id: int
+    status: GradingJobStatus
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    runtime_ms: int | None = None
+    total_tests: int
+    passed_tests: int
+    failed_tests: int
+    failure_type: str | None = None
+    failure_information: str | None = None
+    runner_output: str | None = None
+    results: list[TestResultResponse] = []
+
 

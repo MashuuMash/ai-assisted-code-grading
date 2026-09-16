@@ -33,6 +33,32 @@ services:
       - submission_data:/data/submissions
     command: ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
 
+  sandbox-image:
+    build:
+      context: ./sandbox
+    image: grading-sandbox:latest
+    command: ["true"]
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://grading_user:${POSTGRES_PASSWORD:-postgres_dev_password}@postgres:5432/grading_db
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
+      SUBMISSION_STORAGE_PATH: /data/submissions
+      GRADING_SANDBOX_IMAGE: grading-sandbox:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      sandbox-image:
+        condition: service_completed_successfully
+    volumes:
+      - ./backend:/app
+      - submission_data:/data/submissions:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["sh", "-c", "alembic upgrade head && exec python -m app.worker"]
+
 volumes:
   postgres_data:
   submission_data:
