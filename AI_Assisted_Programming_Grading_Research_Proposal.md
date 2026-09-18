@@ -112,11 +112,11 @@ The research focuses on:
 | Area | In Scope | Initially Out of Scope |
 |---|---|---|
 | Language | Python | Multilingual support in the first version |
-| Users | Students, Instructors | — |
+| Users | Instructors / Lecturers | Student accounts (Students do not log in; platform is an instructor grading workbench) |
 | Grading | Automated testing + rubric | Fully autonomous grading |
 | Integrity | Similarity + evidence + instructor review | Automatic cheating verdict |
 | AI | Feedback + experimental detector | Training an LLM from scratch |
-| Integration | JPlag, pytest, Ruff, Docker | Full LMS replacement |
+| Integration | JPlag, pytest, Ruff, Docker, Batch ZIP Ingestion | Full LMS replacement |
 | Infrastructure | Docker Compose / Linux server or VPS | Kubernetes |
 
 ## 5.3 Assumptions
@@ -219,7 +219,7 @@ The proposed MVP prioritizes:
 The proposed workflow is:
 
 ```text
-Student Submission
+Batch Submission Import (.zip / files)
         ↓
 Secure Execution
         ↓
@@ -233,7 +233,7 @@ Evidence Collection
         ↓
 AI-Assisted Feedback
         ↓
-Instructor Review
+Instructor Review & Export
 ```
 
 Academic-integrity analysis connects to the Evidence Engine through similarity analysis:
@@ -278,30 +278,29 @@ The planned architecture consists of:
 
 | Layer | Technology | Role |
 |---|---|---|
-| Presentation | React + TypeScript | Student/instructor UI |
-| API | Python + FastAPI | Authentication, assignments, submissions, results |
+| Presentation | React + TypeScript | Instructor grading workbench UI |
+| API | Python + FastAPI | Authentication, assignments, submissions, results, exports |
 | Persistence | PostgreSQL | Users, courses, assignments, rubrics, submissions, evidence |
 | Worker | Background jobs | Long-running tasks |
 | Execution | Docker Sandbox | Isolated student-code execution |
 | Testing | pytest | Automated grading |
 | Static Analysis | Ruff + Python AST | Code-quality evidence |
 | Integrity | JPlag | Source-code similarity |
-| AI/ML | PyTorch / Hugging Face | Feedback and experimental detector |
+| AI/ML | PyTorch / Hugging Face / API | Feedback and experimental detector |
 | Deployment | Docker Compose / Linux | Packaging and deployment |
 
 ## Submission Processing Flow
 
-1. Student uploads source code.
-2. Backend validates format and metadata.
-3. Submission enters a job queue.
-4. A dedicated sandbox is created.
-5. Public and hidden tests run with resource limits.
-6. Static analysis generates evidence.
-7. Similarity analysis is performed when required.
-8. Evidence Engine combines the results.
-9. Rubric Engine calculates a suggested grade.
-10. AI generates evidence-grounded feedback.
-11. Instructor reviews, edits, and confirms the result.
+1. Instructor imports submissions (batch .zip archive from LMS or multi-file .py).
+2. Backend unpacks archive, verifies metadata, and maps submissions to student roster records.
+3. Submissions enter the grading queue.
+4. Dedicated Docker sandboxes execute public and hidden test cases under resource limits.
+5. Static analysis and AST complexity analyzer generate verifiable evidence.
+6. Similarity analysis (JPlag) compares submissions across the cohort.
+7. Evidence Engine combines all results.
+8. Rubric Engine calculates suggested grades.
+9. AI synthesizes evidence-grounded feedback drafts.
+10. Instructor reviews, overrides grades, edits feedback, and exports results (CSV / feedback archive).
 
 ---
 
@@ -309,18 +308,15 @@ The planned architecture consists of:
 
 ## 9.1 Authentication and Authorization
 
-At minimum, the system has two roles:
+The system authenticates **Instructors / Lecturers** and **Administrators**. Students do not have system accounts or login credentials; student identities exist as roster records attached to submissions.
 
-- **Instructor**
-- **Student**
-
-Instructors can manage courses, assignments, rubrics, tests, and submissions. Students can manage and view their own submissions within the permitted scope.
+Instructors can manage courses, classes, assignments, rubrics, test suites, batch submissions, and grading reviews.
 
 ## 9.2 Course/Class Management
 
 A course/class organizes:
 
-- Students
+- Student rosters
 - Assignments
 - Submissions
 - Similarity-analysis data
@@ -343,18 +339,17 @@ Assignment templates may be reusable while remaining customizable.
 
 ## 9.4 Submission Management
 
-A submission should store:
+The instructor can batch-import submissions via `.zip` archive (e.g., standard LMS downloads from Moodle, Google Classroom, Canvas) or upload multiple `.py` files directly.
 
-- Student
+The backend unpacks the archive, validates the source files, and links them to student roster records. A submission stores:
+
+- Student identity (ID, Name)
 - Assignment
 - Source artifact
-- Version
-- Timestamp
+- Version / upload timestamp
 - Job status
 - Results
 - Evidence
-
-Multiple submissions may later be retained for studying the student's revision process.
 
 ## 9.5 Instructor Review
 
@@ -368,11 +363,12 @@ The instructor review interface should expose:
 
 Each section should allow the instructor to inspect the underlying evidence rather than displaying only a final score.
 
-## 9.6 Student Feedback
+## 9.6 Feedback and Grade Export
 
-Students receive feedback after instructor confirmation where required by the course workflow.
+Feedback and grades are reviewed, edited, and approved by the instructor. Once approved, the instructor exports the results as:
 
-The MVP should prioritize feedback supported by clear evidence, such as failed tests or specific rule violations.
+- **Gradebook CSV**: Ready for direct import into university LMS or gradebooks.
+- **Feedback Archive (ZIP)**: Individual student reports (Markdown or text) to distribute via normal institutional communication channels.
 
 ---
 
@@ -948,45 +944,47 @@ Potential future directions include:
 # 23. Overall Workflow
 
 ```text
-Student
+Instructor
    ↓
-Submit
+Batch Upload (.zip / multiple .py archives from LMS)
    ↓
-Queue
+Archive Ingestion & Student Roster Association
    ↓
-Docker Sandbox
+Queue (PostgreSQL SKIP LOCKED)
    ↓
-pytest
+Docker Sandbox (Network none, read-only root, non-root user)
    ↓
-Ruff / AST
+pytest (Unit & edge case test execution)
    ↓
-JPlag (if enabled)
+Ruff / AST (Linting, complexity, nesting metrics)
    ↓
-Evidence Engine
+JPlag (Cohort source-code similarity)
    ↓
-Rubric Evaluation
+Evidence Engine (Normalized evidence store)
    ↓
-Suggested Grade
+Rubric Evaluation (Mathematical formula)
    ↓
-AI Feedback
+Suggested Grade (Deterministic calculation)
    ↓
-Instructor Review
+AI Feedback (Grounded in evidence records)
    ↓
-Final Grade / Feedback
+Instructor Review & Grade Overrides
+   ↓
+Export (Gradebook CSV & Feedback Archive ZIP)
 ```
 
 Academic-integrity branch:
 
 ```text
-Submission Set
-      ↓
-Similarity Analysis
-      ↓
-Candidate Cases
-      ↓
-Evidence View
-      ↓
-Instructor Review
+Class Submission Set
+          ↓
+Cohort Similarity Analysis (JPlag)
+          ↓
+Candidate Pairs & Matched Regions
+          ↓
+Side-by-Side Evidence Comparison
+          ↓
+Instructor Evaluation & Human Decision
 ```
 
 There is no **Automatic Cheating Verdict** in the main workflow.
@@ -1020,13 +1018,13 @@ Before implementation, the following issues should be confirmed:
 
 1. What is the official Vietnamese and English project title?
 2. Which modules are mandatory for the MVP?
-3. Does the demo require a complete student portal?
+3. Ingestion formats: Confirm supported LMS export formats (e.g., Moodle ZIP, Google Classroom ZIP, Canvas ZIP, or flat file batches).
 4. Can rubrics be customized for each assignment?
 5. Are hidden tests mandatory?
 6. How deeply should code quality be evaluated?
 7. Is JPlag acceptable as the primary similarity-analysis tool?
 8. Is historical similarity a core requirement or an extension?
-9. Should AI feedback propose scores or only explain evidence?
+9. Should AI feedback propose scores or only explain evidence? (Confirmed: AI only explains evidence, deterministic formulas compute scores).
 10. Should AI-generated-code detection remain a secondary research module or be removed?
 11. What submission data may be used for experiments?
 12. What evaluation methodology does the instructor expect?

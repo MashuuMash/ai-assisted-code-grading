@@ -2,9 +2,11 @@ import enum
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -144,6 +146,12 @@ class Assignment(Base):
     test_cases: Mapped[list["TestCase"]] = relationship(
         back_populates="assignment", cascade="all, delete-orphan"
     )
+    evidence_records: Mapped[list["SubmissionEvidence"]] = relationship(
+        back_populates="assignment", cascade="all, delete-orphan"
+    )
+    rubric: Mapped["Rubric | None"] = relationship(
+        back_populates="assignment", uselist=False, cascade="all, delete-orphan"
+    )
 
 
 class Submission(Base):
@@ -151,7 +159,11 @@ class Submission(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     assignment_id: Mapped[int] = mapped_column(ForeignKey("assignments.id", ondelete="CASCADE"), index=True)
-    student_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    student_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, default=None, index=True
+    )
+    student_identifier: Mapped[str] = mapped_column(String(128), index=True, default="")
+    student_name: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
     original_filename: Mapped[str] = mapped_column(String(255))
     storage_key: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     size_bytes: Mapped[int] = mapped_column(Integer)
@@ -159,9 +171,15 @@ class Submission(Base):
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
 
     assignment: Mapped[Assignment] = relationship(back_populates="submissions")
-    student: Mapped[User] = relationship(back_populates="submissions")
+    student: Mapped[User | None] = relationship(back_populates="submissions")
     grading_jobs: Mapped[list["GradingJob"]] = relationship(
         back_populates="submission", cascade="all, delete-orphan"
+    )
+    evidence_records: Mapped[list["SubmissionEvidence"]] = relationship(
+        back_populates="submission", cascade="all, delete-orphan"
+    )
+    grade: Mapped["SubmissionGrade | None"] = relationship(
+        back_populates="submission", uselist=False, cascade="all, delete-orphan"
     )
 
 
@@ -256,3 +274,167 @@ class TestResult(Base):
 
     grading_job: Mapped[GradingJob] = relationship(back_populates="results")
     test_case: Mapped[TestCase] = relationship(back_populates="results")
+
+
+class EvidenceSource(str, enum.Enum):
+    PYTEST = "pytest"
+    RUFF = "ruff"
+    AST = "ast"
+    JPLAG = "jplag"
+
+
+class EvidenceCategory(str, enum.Enum):
+    CORRECTNESS = "correctness"
+    ROBUSTNESS = "robustness"
+    CODE_QUALITY = "code_quality"
+    COMPLEXITY = "complexity"
+    SIMILARITY = "similarity"
+
+
+class EvidenceSeverity(str, enum.Enum):
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+
+
+evidence_source_type = Enum(
+    EvidenceSource,
+    name="evidencesource",
+    values_callable=lambda vals: [v.value for v in vals],
+)
+evidence_category_type = Enum(
+    EvidenceCategory,
+    name="evidencecategory",
+    values_callable=lambda vals: [v.value for v in vals],
+)
+evidence_severity_type = Enum(
+    EvidenceSeverity,
+    name="evidenceseverity",
+    values_callable=lambda vals: [v.value for v in vals],
+)
+
+
+class SubmissionEvidence(Base):
+    __tablename__ = "submission_evidence"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    submission_id: Mapped[int] = mapped_column(ForeignKey("submissions.id", ondelete="CASCADE"), index=True)
+    assignment_id: Mapped[int] = mapped_column(ForeignKey("assignments.id", ondelete="CASCADE"), index=True)
+    source: Mapped[EvidenceSource] = mapped_column(evidence_source_type, index=True)
+    category: Mapped[EvidenceCategory] = mapped_column(evidence_category_type, index=True)
+    severity: Mapped[EvidenceSeverity] = mapped_column(evidence_severity_type, index=True)
+    rule_code: Mapped[str] = mapped_column(String(64), index=True)
+    message: Mapped[str] = mapped_column(Text)
+    location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    metric_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    raw_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    submission: Mapped[Submission] = relationship(back_populates="evidence_records")
+    assignment: Mapped[Assignment] = relationship(back_populates="evidence_records")
+
+
+class EvaluationType(str, enum.Enum):
+    AUTOMATED_TEST = "automated_test"
+    CODE_QUALITY = "code_quality"
+    STRUCTURAL_COMPLEXITY = "structural_complexity"
+    MANUAL = "manual"
+
+
+class GradeStatus(str, enum.Enum):
+    PENDING = "pending"
+    DRAFT = "draft"
+    CONFIRMED = "confirmed"
+
+
+evaluation_type_enum = Enum(
+    EvaluationType,
+    name="evaluationtype",
+    values_callable=lambda vals: [v.value for v in vals],
+)
+
+grade_status_enum = Enum(
+    GradeStatus,
+    name="gradestatus",
+    values_callable=lambda vals: [v.value for v in vals],
+)
+
+
+class Rubric(Base):
+    __tablename__ = "rubrics"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    assignment_id: Mapped[int] = mapped_column(
+        ForeignKey("assignments.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, default=None)
+    max_score: Mapped[float] = mapped_column(Float, default=10.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    assignment: Mapped[Assignment] = relationship(back_populates="rubric")
+    criteria: Mapped[list["RubricCriterion"]] = relationship(
+        back_populates="rubric", cascade="all, delete-orphan", order_by="RubricCriterion.order_index"
+    )
+    submission_grades: Mapped[list["SubmissionGrade"]] = relationship(back_populates="rubric")
+
+
+class RubricCriterion(Base):
+    __tablename__ = "rubric_criteria"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    rubric_id: Mapped[int] = mapped_column(ForeignKey("rubrics.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, default=None)
+    category: Mapped[EvidenceCategory] = mapped_column(evidence_category_type, index=True)
+    evaluation_type: Mapped[EvaluationType] = mapped_column(evaluation_type_enum, index=True)
+    weight_percentage: Mapped[float] = mapped_column(Float)
+    max_points: Mapped[float] = mapped_column(Float)
+    config: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+
+    rubric: Mapped[Rubric] = relationship(back_populates="criteria")
+    criterion_scores: Mapped[list["CriterionScore"]] = relationship(
+        back_populates="criterion", cascade="all, delete-orphan"
+    )
+
+
+class SubmissionGrade(Base):
+    __tablename__ = "submission_grades"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    submission_id: Mapped[int] = mapped_column(
+        ForeignKey("submissions.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    rubric_id: Mapped[int] = mapped_column(ForeignKey("rubrics.id", ondelete="RESTRICT"), index=True)
+    suggested_total_score: Mapped[float] = mapped_column(Float, default=0.0)
+    final_total_score: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
+    status: Mapped[GradeStatus] = mapped_column(grade_status_enum, default=GradeStatus.DRAFT, index=True)
+    feedback_summary: Mapped[str | None] = mapped_column(Text, default=None)
+    graded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    confirmed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    submission: Mapped[Submission] = relationship(back_populates="grade")
+    rubric: Mapped[Rubric] = relationship(back_populates="submission_grades")
+    criterion_scores: Mapped[list["CriterionScore"]] = relationship(
+        back_populates="submission_grade", cascade="all, delete-orphan"
+    )
+
+
+class CriterionScore(Base):
+    __tablename__ = "criterion_scores"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    submission_grade_id: Mapped[int] = mapped_column(
+        ForeignKey("submission_grades.id", ondelete="CASCADE"), index=True
+    )
+    criterion_id: Mapped[int] = mapped_column(ForeignKey("rubric_criteria.id", ondelete="CASCADE"), index=True)
+    suggested_score: Mapped[float] = mapped_column(Float, default=0.0)
+    final_score: Mapped[float] = mapped_column(Float, default=0.0)
+    is_overridden: Mapped[bool] = mapped_column(Boolean, default=False)
+    justification: Mapped[str | None] = mapped_column(Text, default=None)
+
+    submission_grade: Mapped[SubmissionGrade] = relationship(back_populates="criterion_scores")
+    criterion: Mapped[RubricCriterion] = relationship(back_populates="criterion_scores")
+

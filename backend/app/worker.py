@@ -6,6 +6,11 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_settings
 from app.database import SessionLocal
+from app.evidence_engine import (
+    generate_static_analysis_evidence,
+    generate_test_evidence,
+    persist_submission_evidence,
+)
 from app.grading_jobs import transition_job
 from app.models import (
     GradingJob,
@@ -15,7 +20,9 @@ from app.models import (
     TestOutcome,
     TestResult,
 )
+from app.rubric_engine import evaluate_submission_grade
 from app.sandbox_runner import DockerSandboxRunner
+from app.static_analysis import StaticAnalyzer
 from app.submission_storage import SubmissionStorage
 
 logging.basicConfig(level=logging.INFO)
@@ -116,6 +123,29 @@ def process_job(
             job.passed_tests = sum(item.outcome == TestOutcome.PASSED for item in result.results)
             job.failed_tests = job.total_tests - job.passed_tests
             transition_job(job, GradingJobStatus.COMPLETED)
+
+        # Static analysis and Evidence Engine integration
+        static_report = StaticAnalyzer().analyze_file(source_path)
+        test_vis_map = {t.id: t.visibility for t in tests}
+        test_evidence = generate_test_evidence(
+            submission_id=job.submission_id,
+            assignment_id=job.submission.assignment_id,
+            test_results=job.results,
+            test_visibility_map=test_vis_map,
+        )
+        static_evidence = generate_static_analysis_evidence(
+            submission_id=job.submission_id,
+            assignment_id=job.submission.assignment_id,
+            report=static_report,
+        )
+        persist_submission_evidence(
+            db=session,
+            submission_id=job.submission_id,
+            evidence_items=test_evidence + static_evidence,
+        )
+
+        # Mathematical rubric evaluation
+        evaluate_submission_grade(db=session, submission_id=job.submission_id)
 
         session.commit()
 

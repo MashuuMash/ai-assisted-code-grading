@@ -2,7 +2,18 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.models import AssignmentStatus, GradingJobStatus, TestOutcome, TestVisibility, UserRole
+from app.models import (
+    AssignmentStatus,
+    EvaluationType,
+    EvidenceCategory,
+    EvidenceSeverity,
+    EvidenceSource,
+    GradeStatus,
+    GradingJobStatus,
+    TestOutcome,
+    TestVisibility,
+    UserRole,
+)
 
 
 class UserBase(BaseModel):
@@ -149,12 +160,48 @@ class SubmissionResponse(BaseModel):
 
     id: int
     assignment_id: int
-    student_id: int
+    student_id: int | None = None
+    student_identifier: str = ""
+    student_name: str | None = None
     original_filename: str
     size_bytes: int
     sha256: str
     submitted_at: datetime
     student: UserResponse | None = None
+
+
+class BatchUploadItem(BaseModel):
+    submission_id: int
+    student_identifier: str
+    student_name: str | None = None
+    filename: str
+    size_bytes: int
+    job_id: int | None = None
+
+
+class BatchUploadResponse(BaseModel):
+    total_found: int
+    imported_count: int
+    failed_count: int
+    submissions: list[BatchUploadItem]
+    errors: list[str] = []
+
+
+class EvidenceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    submission_id: int
+    assignment_id: int
+    source: EvidenceSource
+    category: EvidenceCategory
+    severity: EvidenceSeverity
+    rule_code: str
+    message: str
+    location: str | None = None
+    metric_value: float | None = None
+    raw_data: dict | None = None
+    created_at: datetime
 
 
 class TestCaseBase(BaseModel):
@@ -214,5 +261,95 @@ class GradingJobResponse(BaseModel):
     failure_information: str | None = None
     runner_output: str | None = None
     results: list[TestResultResponse] = []
+
+
+class RubricCriterionBase(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    category: EvidenceCategory
+    evaluation_type: EvaluationType
+    weight_percentage: float = Field(gt=0, le=100)
+    config: dict | None = None
+    order_index: int = 0
+
+
+class RubricCriterionCreate(RubricCriterionBase):
+    pass
+
+
+class RubricCriterionResponse(RubricCriterionBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    rubric_id: int
+    max_points: float
+
+
+class RubricBase(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    max_score: float = Field(gt=0, default=10.0)
+
+
+class RubricCreate(RubricBase):
+    criteria: list[RubricCriterionCreate] = []
+
+
+class RubricUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = None
+    max_score: float | None = Field(default=None, gt=0)
+    criteria: list[RubricCriterionCreate] | None = None
+
+
+class RubricResponse(RubricBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    assignment_id: int
+    created_at: datetime
+    updated_at: datetime
+    criteria: list[RubricCriterionResponse] = []
+
+
+class CriterionScoreResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    criterion_id: int
+    suggested_score: float
+    final_score: float
+    is_overridden: bool
+    justification: str | None = None
+    criterion: RubricCriterionResponse | None = None
+
+
+class CriterionScoreOverride(BaseModel):
+    criterion_id: int
+    final_score: float = Field(ge=0)
+    justification: str | None = None
+
+
+class SubmissionGradeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    submission_id: int
+    rubric_id: int
+    suggested_total_score: float
+    final_total_score: float | None = None
+    status: GradeStatus
+    feedback_summary: str | None = None
+    graded_at: datetime
+    confirmed_by_id: int | None = None
+    criterion_scores: list[CriterionScoreResponse] = []
+
+
+class SubmissionGradeOverride(BaseModel):
+    final_total_score: float | None = None
+    status: GradeStatus = GradeStatus.CONFIRMED
+    feedback_summary: str | None = None
+    criterion_overrides: list[CriterionScoreOverride] = []
+
 
 

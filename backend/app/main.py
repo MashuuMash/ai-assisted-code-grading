@@ -7,6 +7,7 @@ from app.routes.auth import router as auth_router
 from app.routes.classes import router as classes_router
 from app.routes.courses import router as courses_router
 from app.routes.grading import router as grading_router
+from app.routes.rubrics import router as rubrics_router
 
 settings = get_settings()
 
@@ -29,6 +30,7 @@ app.include_router(courses_router, prefix="/api/v1")
 app.include_router(classes_router, prefix="/api/v1")
 app.include_router(assignments_router, prefix="/api/v1")
 app.include_router(grading_router, prefix="/api/v1")
+app.include_router(rubrics_router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["health"])

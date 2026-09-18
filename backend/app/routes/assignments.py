@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
 from app.authorization import can_manage_class, can_view_class
+from app.batch_ingestion import ingest_batch_zip
 from app.database import get_db
 from app.models import (
     Assignment,
@@ -16,6 +17,7 @@ from app.models import (
     Cohort,
     Course,
     Submission,
+    SubmissionEvidence,
     User,
     UserRole,
 )
@@ -23,6 +25,8 @@ from app.schemas import (
     AssignmentCreate,
     AssignmentResponse,
     AssignmentUpdate,
+    BatchUploadResponse,
+    EvidenceResponse,
     SubmissionResponse,
 )
 from app.submission_storage import SubmissionStorage
@@ -354,3 +358,83 @@ def get_submission_source(
         media_type="text/x-python",
         filename=submission.original_filename,
     )
+
+
+@router.post("/{assignment_id}/submissions/batch-zip", response_model=BatchUploadResponse)
+def batch_upload_submissions(
+    course_id: int,
+    class_id: int,
+    assignment_id: int,
+    file: Annotated[UploadFile, File(...)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> BatchUploadResponse:
+    cohort = get_class_or_404(course_id, class_id, db)
+    if not can_manage_class(current_user, cohort):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    _ = get_assignment_or_404(class_id, assignment_id, db)
+
+    if not file.filename or not file.filename.lower().endswith(".zip"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Batch submissions must be uploaded as a .zip archive",
+        )
+
+    try:
+        archive_bytes = file.file.read()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to read upload archive: {exc}",
+        )
+
+    try:
+        return ingest_batch_zip(
+            db=db,
+            assignment_id=assignment_id,
+            archive_bytes=archive_bytes,
+            auto_queue=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+@router.get(
+    "/{assignment_id}/submissions/{submission_id}/evidence",
+    response_model=list[EvidenceResponse],
+)
+def get_submission_evidence(
+    course_id: int,
+    class_id: int,
+    assignment_id: int,
+    submission_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[SubmissionEvidence]:
+    cohort = get_class_or_404(course_id, class_id, db)
+    _ = get_assignment_or_404(class_id, assignment_id, db)
+
+    submission = db.scalar(
+        select(Submission).where(
+            Submission.id == submission_id, Submission.assignment_id == assignment_id
+        )
+    )
+    if not submission:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+    if current_user.role == UserRole.STUDENT and submission.student_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    if current_user.role == UserRole.LECTURER and not can_manage_class(current_user, cohort):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    records = list(
+        db.scalars(
+            select(SubmissionEvidence)
+            .where(SubmissionEvidence.submission_id == submission_id)
+            .order_by(SubmissionEvidence.created_at)
+        ).all()
+    )
+    return records
+

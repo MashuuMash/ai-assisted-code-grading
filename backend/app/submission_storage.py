@@ -75,6 +75,42 @@ class SubmissionStorage:
             sha256=digest.hexdigest(),
         )
 
+    def store_bytes(self, content: bytes, filename: str) -> StoredSource:
+        original_filename = self._validate_filename(filename)
+        if len(content) > self.max_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Source file exceeds the {self.max_bytes}-byte limit",
+            )
+        if len(content) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Source file is empty",
+            )
+        if b"\x00" in content:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Python source must not contain null bytes",
+            )
+
+        self.root.mkdir(parents=True, exist_ok=True)
+        storage_key = f"{uuid4().hex}.py"
+        destination = self._path_for(storage_key)
+        temporary = self._path_for(f"{uuid4().hex}.tmp")
+
+        try:
+            temporary.write_bytes(content)
+            temporary.replace(destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+        return StoredSource(
+            original_filename=original_filename,
+            storage_key=storage_key,
+            size_bytes=len(content),
+            sha256=hashlib.sha256(content).hexdigest(),
+        )
+
     def source_path(self, storage_key: str) -> Path:
         return self._path_for(storage_key)
 
