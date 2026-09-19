@@ -1,0 +1,79 @@
+{
+  "timestamp": "2026-09-18T10:26:39Z",
+  "rq1_static_analysis": {
+    "50_loc": {
+      "loc": 50,
+      "ast_latency_ms": 0.091,
+      "ruff_latency_ms": 20.35,
+      "ast_cc": 1,
+      "ast_max_depth": 0
+    },
+    "150_loc": {
+      "loc": 150,
+      "ast_latency_ms": 0.138,
+      "ruff_latency_ms": 18.984,
+      "ast_cc": 1,
+      "ast_max_depth": 0
+    },
+    "300_loc": {
+      "loc": 300,
+      "ast_latency_ms": 0.13,
+      "ruff_latency_ms": 20.32,
+      "ast_cc": 1,
+      "ast_max_depth": 0
+    },
+    "600_loc": {
+      "loc": 600,
+      "ast_latency_ms": 0.189,
+      "ruff_latency_ms": 23.401,
+      "ast_cc": 1,
+      "ast_max_depth": 0
+    }
+  },
+  "rq2_rubric_determinism": {
+    "trials": 100,
+    "score_value": 6.9,
+    "score_variance": 0.0,
+    "is_deterministic": true,
+    "mean_eval_time_ms": 3.9805
+  },
+  "rq3_similarity_and_subtraction": {
+    "base_code_subtraction": {
+      "similarity_without_subtraction_pct": 66.67,
+      "similarity_with_subtraction_pct": 22.22,
+      "false_positive_reduction_pct": 44.45
+    },
+    "scaling": {
+      "N=5": {
+        "submissions": 5,
+        "pairwise_comparisons": 10,
+        "total_time_ms": 6.168,
+        "time_per_comparison_us": 616.82
+      },
+      "N=10": {
+        "submissions": 10,
+        "pairwise_comparisons": 45,
+        "total_time_ms": 25.068,
+        "time_per_comparison_us": 557.07
+      },
+      "N=20": {
+        "submissions": 20,
+        "pairwise_comparisons": 190,
+        "total_time_ms": 110.232,
+        "time_per_comparison_us": 580.17
+      },
+      "N=30": {
+        "submissions": 30,
+        "pairwise_comparisons": 435,
+        "total_time_ms": 251.163,
+        "time_per_comparison_us": 577.39
+      }
+    }
+  },
+  "rq4_ai_feedback_grounding": {
+    "grounding_ratio_pct": 100.0,
+    "mean_synthesis_time_ms": 0.009,
+    "anti_hallucination_filter_passed": true,
+    "prompt_injection_immunity_passed": true
+  }
+}

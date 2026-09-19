@@ -1,0 +1,52 @@
+{
+  "dataset_sample_count": 11,
+  "classification_metrics": {
+    "accuracy": 0.7273,
+    "precision": 0.7,
+    "recall": 1.0,
+    "f1_score": 0.8235,
+    "confusion_matrix": {
+      "true_positives": 7,
+      "false_positives": 3,
+      "true_negatives": 1,
+      "false_negatives": 0
+    }
+  },
+  "score_distribution": {
+    "mean_human_probability": 0.5219,
+    "mean_ai_probability": 0.6161,
+    "separation_margin": 0.0942
+  },
+  "rq5_cross_model_breakdown": {
+    "human_student": {
+      "count": 4,
+      "mean_ai_probability": 0.5219,
+      "detection_rate_pct": 75.0
+    },
+    "ai_gpt4o": {
+      "count": 2,
+      "mean_ai_probability": 0.6125,
+      "detection_rate_pct": 100.0
+    },
+    "ai_claude35": {
+      "count": 2,
+      "mean_ai_probability": 0.6875,
+      "detection_rate_pct": 100.0
+    },
+    "ai_perturbed": {
+      "count": 2,
+      "mean_ai_probability": 0.5125,
+      "detection_rate_pct": 100.0
+    },
+    "ai_gemini25": {
+      "count": 1,
+      "mean_ai_probability": 0.6875,
+      "detection_rate_pct": 100.0
+    }
+  },
+  "rq5_evasion_robustness": {
+    "unperturbed_ai_mean_prob": 0.6575,
+    "perturbed_ai_mean_prob": 0.5125,
+    "evasion_drop_percentage_points": 14.5
+  }
+}

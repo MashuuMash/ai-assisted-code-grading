@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     openai_base_url: str = "https://api.openai.com/v1"
     ai_model: str = "gemini-2.5-flash"
 
+    jplag_jar_path: str | None = None
+    similarity_default_threshold: float = 50.0
+
 
 @lru_cache
 def get_settings() -> Settings:

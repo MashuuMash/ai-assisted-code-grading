@@ -152,6 +152,9 @@ class Assignment(Base):
     rubric: Mapped["Rubric | None"] = relationship(
         back_populates="assignment", uselist=False, cascade="all, delete-orphan"
     )
+    similarity_reports: Mapped[list["SimilarityReport"]] = relationship(
+        back_populates="assignment", cascade="all, delete-orphan"
+    )
 
 
 class Submission(Base):
@@ -281,6 +284,7 @@ class EvidenceSource(str, enum.Enum):
     RUFF = "ruff"
     AST = "ast"
     JPLAG = "jplag"
+    CODEBERT = "codebert"
 
 
 class EvidenceCategory(str, enum.Enum):
@@ -412,6 +416,7 @@ class SubmissionGrade(Base):
     final_total_score: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
     status: Mapped[GradeStatus] = mapped_column(grade_status_enum, default=GradeStatus.DRAFT, index=True)
     feedback_summary: Mapped[str | None] = mapped_column(Text, default=None)
+    detailed_feedback: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
     graded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     confirmed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
@@ -437,4 +442,82 @@ class CriterionScore(Base):
 
     submission_grade: Mapped[SubmissionGrade] = relationship(back_populates="criterion_scores")
     criterion: Mapped[RubricCriterion] = relationship(back_populates="criterion_scores")
+
+
+class SimilarityStatus(str, enum.Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class ComparisonReviewStatus(str, enum.Enum):
+    UNREVIEWED = "unreviewed"
+    FLAGGED = "flagged"
+    DISMISSED = "dismissed"
+
+
+similarity_status_enum = Enum(
+    SimilarityStatus,
+    name="similaritystatus",
+    values_callable=lambda vals: [v.value for v in vals],
+)
+
+comparison_review_status_enum = Enum(
+    ComparisonReviewStatus,
+    name="comparisonreviewstatus",
+    values_callable=lambda vals: [v.value for v in vals],
+)
+
+
+class SimilarityReport(Base):
+    __tablename__ = "similarity_reports"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    assignment_id: Mapped[int] = mapped_column(
+        ForeignKey("assignments.id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[SimilarityStatus] = mapped_column(
+        similarity_status_enum, default=SimilarityStatus.QUEUED, index=True
+    )
+    threshold_used: Mapped[float] = mapped_column(Float, default=50.0)
+    submission_count: Mapped[int] = mapped_column(Integer, default=0)
+    avg_similarity: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
+    max_similarity: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
+    report_path: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+
+    assignment: Mapped[Assignment] = relationship(back_populates="similarity_reports")
+    comparisons: Mapped[list["SimilarityComparison"]] = relationship(
+        back_populates="report", cascade="all, delete-orphan", order_by="SimilarityComparison.similarity_percentage.desc()"
+    )
+
+
+class SimilarityComparison(Base):
+    __tablename__ = "similarity_comparisons"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    report_id: Mapped[int] = mapped_column(
+        ForeignKey("similarity_reports.id", ondelete="CASCADE"), index=True
+    )
+    submission_a_id: Mapped[int] = mapped_column(
+        ForeignKey("submissions.id", ondelete="CASCADE"), index=True
+    )
+    submission_b_id: Mapped[int] = mapped_column(
+        ForeignKey("submissions.id", ondelete="CASCADE"), index=True
+    )
+    similarity_percentage: Mapped[float] = mapped_column(Float, index=True)
+    matched_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[ComparisonReviewStatus] = mapped_column(
+        comparison_review_status_enum, default=ComparisonReviewStatus.UNREVIEWED, index=True
+    )
+    matched_regions: Mapped[list | None] = mapped_column(JSON, nullable=True, default=None)
+    review_notes: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+
+    report: Mapped[SimilarityReport] = relationship(back_populates="comparisons")
+    submission_a: Mapped[Submission] = relationship(foreign_keys=[submission_a_id])
+    submission_b: Mapped[Submission] = relationship(foreign_keys=[submission_b_id])
+
 

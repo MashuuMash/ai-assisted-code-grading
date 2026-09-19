@@ -4,12 +4,14 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.models import (
     AssignmentStatus,
+    ComparisonReviewStatus,
     EvaluationType,
     EvidenceCategory,
     EvidenceSeverity,
     EvidenceSource,
     GradeStatus,
     GradingJobStatus,
+    SimilarityStatus,
     TestOutcome,
     TestVisibility,
     UserRole,
@@ -340,6 +342,7 @@ class SubmissionGradeResponse(BaseModel):
     final_total_score: float | None = None
     status: GradeStatus
     feedback_summary: str | None = None
+    detailed_feedback: dict | None = None
     graded_at: datetime
     confirmed_by_id: int | None = None
     criterion_scores: list[CriterionScoreResponse] = []
@@ -349,7 +352,112 @@ class SubmissionGradeOverride(BaseModel):
     final_total_score: float | None = None
     status: GradeStatus = GradeStatus.CONFIRMED
     feedback_summary: str | None = None
+    detailed_feedback: dict | None = None
     criterion_overrides: list[CriterionScoreOverride] = []
+
+
+class SimilarityRunRequest(BaseModel):
+    threshold: float = Field(default=50.0, ge=0.0, le=100.0)
+
+
+class SimilarityComparisonResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    report_id: int
+    submission_a_id: int
+    submission_b_id: int
+    similarity_percentage: float
+    matched_tokens: int
+    status: ComparisonReviewStatus
+    matched_regions: list | None = None
+    review_notes: str | None = None
+
+
+class SimilarityReportResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    assignment_id: int
+    status: SimilarityStatus
+    threshold_used: float
+    submission_count: int
+    avg_similarity: float | None = None
+    max_similarity: float | None = None
+    report_path: str | None = None
+    error_message: str | None = None
+    created_at: datetime
+    completed_at: datetime | None = None
+
+
+class SimilarityReportDetailResponse(SimilarityReportResponse):
+    comparisons: list[SimilarityComparisonResponse] = []
+
+
+class ComparisonReviewUpdate(BaseModel):
+    status: ComparisonReviewStatus
+    review_notes: str | None = None
+
+
+class FeedbackImprovementItem(BaseModel):
+    evidence_id: str
+    criterion_title: str | None = None
+    issue: str
+    suggestion: str
+    severity: EvidenceSeverity
+
+
+class DetailedFeedbackPayload(BaseModel):
+    summary: str
+    strengths: list[str] = []
+    areas_for_improvement: list[FeedbackImprovementItem] = []
+    citations: list[str] = []
+
+
+class FeedbackGenerateRequest(BaseModel):
+    model_override: str | None = None
+
+
+class FeedbackUpdate(BaseModel):
+    feedback_summary: str | None = None
+    detailed_feedback: dict | None = None
+    status: GradeStatus | None = None
+
+
+class SubmissionFeedbackResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    submission_id: int
+    submission_grade_id: int
+    status: GradeStatus
+    suggested_total_score: float
+    final_total_score: float | None = None
+    feedback_summary: str | None = None
+    detailed_feedback: dict | None = None
+    citations: list[str] = []
+
+
+class BatchFeedbackResponse(BaseModel):
+    total_submissions: int
+    generated_count: int
+    failed_count: int
+    results: list[dict] = []
+
+
+class AiDetectionResponse(BaseModel):
+    submission_id: int
+    ai_probability: float
+    classification: str
+    confidence_score: float
+    model_mode: str
+    signals: list[str] = []
+    evidence_id: str | None = None
+
+
+class BatchAiDetectionResponse(BaseModel):
+    total_analyzed: int
+    high_probability_count: int
+    results: list[AiDetectionResponse] = []
 
 
 
