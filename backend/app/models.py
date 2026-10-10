@@ -417,6 +417,7 @@ class SubmissionGrade(Base):
     status: Mapped[GradeStatus] = mapped_column(grade_status_enum, default=GradeStatus.DRAFT, index=True)
     feedback_summary: Mapped[str | None] = mapped_column(Text, default=None)
     detailed_feedback: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
+    feedback_source: Mapped[str | None] = mapped_column(String(32), nullable=True, default=None)
     graded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     confirmed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
@@ -481,6 +482,7 @@ class SimilarityReport(Base):
         similarity_status_enum, default=SimilarityStatus.QUEUED, index=True
     )
     threshold_used: Mapped[float] = mapped_column(Float, default=50.0)
+    engine: Mapped[str] = mapped_column(String(32), default="winnowing")
     submission_count: Mapped[int] = mapped_column(Integer, default=0)
     avg_similarity: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
     max_similarity: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
@@ -519,5 +521,3 @@ class SimilarityComparison(Base):
     report: Mapped[SimilarityReport] = relationship(back_populates="comparisons")
     submission_a: Mapped[Submission] = relationship(foreign_keys=[submission_a_id])
     submission_b: Mapped[Submission] = relationship(foreign_keys=[submission_b_id])
-
-

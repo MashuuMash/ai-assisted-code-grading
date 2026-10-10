@@ -33,7 +33,7 @@ def upgrade() -> None:
         sa.Column("instructions", sa.Text(), nullable=True),
         sa.Column("language", sa.String(length=20), server_default="python", nullable=False),
         sa.Column("deadline", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("status", sa.Enum("draft", "published", "closed", name="assignmentstatus"), server_default="draft", nullable=False),
+        sa.Column("status", assignmentstatus_enum, server_default="draft", nullable=False),
         sa.Column("base_code", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),

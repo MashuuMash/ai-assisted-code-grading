@@ -2,8 +2,10 @@ import ast
 import math
 import uuid
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
+from app.config import get_settings
 from app.models import (
     EvidenceCategory,
     EvidenceSeverity,
@@ -37,22 +39,37 @@ class CodeBertPrediction:
 
 
 class CodeBertDetector:
-    """Experimental AI-generated-code detector using Microsoft CodeBERT with fallback heuristic."""
+    """Experimental style signal; a trained local classifier is optional."""
 
-    def __init__(self, model_name_or_path: str = "microsoft/codebert-base") -> None:
-        self.model_name = model_name_or_path
+    def __init__(self, model_name_or_path: str | None = None) -> None:
+        configured_path = get_settings().ai_detector_model_path
+        self.model_name = model_name_or_path or (str(configured_path) if configured_path else None)
         self._model = None
         self._tokenizer = None
         self.is_transformers_loaded = False
+        self._ai_label_index = 1
 
     def _init_transformers_model(self) -> bool:
-        if not TRANSFORMERS_AVAILABLE or self._model is not None:
+        if not TRANSFORMERS_AVAILABLE or not self.model_name or self._model is not None:
             return self.is_transformers_loaded
 
+        # Only an explicitly supplied, locally saved fine-tuned checkpoint may be loaded.
+        if not Path(self.model_name).is_dir():
+            return False
+
         try:
-            self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+            self._tokenizer = AutoTokenizer.from_pretrained(self.model_name, local_files_only=True)
             self._model = AutoModelForSequenceClassification.from_pretrained(
-                self.model_name, num_labels=2
+                self.model_name, local_files_only=True
+            )
+            labels = {label.lower() for label in self._model.config.id2label.values()}
+            if labels != {"human", "ai_generated"}:
+                self._model = None
+                self._tokenizer = None
+                return False
+            self._ai_label_index = next(
+                int(index) for index, label in self._model.config.id2label.items()
+                if label.lower() == "ai_generated"
             )
             self._model.eval()
             self.is_transformers_loaded = True
@@ -65,8 +82,8 @@ class CodeBertDetector:
         if not source_code or not source_code.strip():
             return CodeBertPrediction(
                 ai_probability=0.0,
-                classification="human",
-                confidence_score=1.0,
+                classification="inconclusive",
+                confidence_score=0.0,
                 model_mode="empty_source",
                 signals=["Empty source code"],
             )
@@ -89,7 +106,7 @@ class CodeBertDetector:
                 outputs = self._model(**inputs)
                 probs = torch.softmax(outputs.logits, dim=1).squeeze().tolist()
 
-            ai_prob = float(probs[1]) if isinstance(probs, list) and len(probs) > 1 else 0.5
+            ai_prob = float(probs[self._ai_label_index]) if isinstance(probs, list) and len(probs) > 1 else 0.5
             ai_prob = round(max(0.0, min(1.0, ai_prob)), 4)
             confidence = round(abs(ai_prob - 0.5) * 2.0, 4)
 
@@ -126,10 +143,10 @@ class CodeBertDetector:
         except SyntaxError:
             return CodeBertPrediction(
                 ai_probability=0.15,
-                classification="human",
-                confidence_score=0.70,
+                classification="inconclusive",
+                confidence_score=0.0,
                 model_mode="heuristic_statistical",
-                signals=["Syntax error present; typical of human exploratory editing"],
+                signals=["Syntax error prevents reliable style analysis"],
             )
 
         # 1. Docstring & Comment structure analysis
@@ -191,11 +208,9 @@ class CodeBertDetector:
         # Average probability from components
         ai_prob = sum(score_components) / len(score_components) if score_components else 0.5
         ai_prob = round(max(0.05, min(0.95, ai_prob)), 4)
-        confidence = round(abs(ai_prob - 0.5) * 2.0, 4)
-
-        classification = (
-            "ai_generated" if ai_prob >= 0.65 else "human" if ai_prob <= 0.35 else "inconclusive"
-        )
+        # Heuristic scores have not been calibrated against authorship labels.
+        confidence = 0.0
+        classification = "inconclusive"
 
         return CodeBertPrediction(
             ai_probability=ai_prob,
@@ -218,23 +233,20 @@ def generate_codebert_evidence(
         severity = EvidenceSeverity.WARNING
         rule_code = "AI_CODE_PROBABILITY_HIGH"
         message = (
-            f"CodeBERT detected elevated likelihood of AI-generated source code ({pct}%). "
-            f"Classification: {prediction.classification}. "
+            f"Experimental code-style score: {pct}%. This is a review signal, not proof of AI authorship. "
             f"Top signal: {prediction.signals[0] if prediction.signals else 'Consistent stylometric profile'}"
         )
     elif prediction.ai_probability <= 0.35:
         severity = EvidenceSeverity.INFO
         rule_code = "AI_CODE_PROBABILITY_LOW"
         message = (
-            f"CodeBERT detected low likelihood of AI-generated source code ({pct}%). "
-            f"Classification: {prediction.classification}."
+            f"Experimental code-style score: {pct}%. This cannot establish human authorship."
         )
     else:
         severity = EvidenceSeverity.INFO
         rule_code = "AI_CODE_PROBABILITY_INCONCLUSIVE"
         message = (
-            f"CodeBERT AI code detection was inconclusive ({pct}%). "
-            "Manual review recommended if academic integrity verification is required."
+            f"Experimental code-style score: {pct}%. Authorship remains inconclusive."
         )
 
     evidence_item = SubmissionEvidence(

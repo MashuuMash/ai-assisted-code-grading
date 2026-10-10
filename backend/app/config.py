@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = False
 
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/grading_db"
+    database_url: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/grading_db"
 
     secret_key: str = "dev-secret-key-change-in-production"
     algorithm: str = "HS256"
@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     ai_model: str = "gemini-2.5-flash"
+    ai_detector_model_path: Path | None = None
 
     jplag_jar_path: str | None = None
     similarity_default_threshold: float = 50.0

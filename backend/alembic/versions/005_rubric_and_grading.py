@@ -24,6 +24,7 @@ def upgrade() -> None:
 
     eval_enum = postgresql.ENUM("automated_test", "code_quality", "structural_complexity", "manual", name="evaluationtype", create_type=False)
     grade_enum = postgresql.ENUM("pending", "draft", "confirmed", name="gradestatus", create_type=False)
+    category_enum = postgresql.ENUM("correctness", "robustness", "code_quality", "complexity", "similarity", name="evidencecategory", create_type=False)
 
     if is_postgres:
         eval_enum.create(bind, checkfirst=True)
@@ -48,8 +49,8 @@ def upgrade() -> None:
         sa.Column("rubric_id", sa.Integer(), sa.ForeignKey("rubrics.id", ondelete="CASCADE"), nullable=False),
         sa.Column("title", sa.String(length=255), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("category", sa.Enum("correctness", "robustness", "code_quality", "complexity", "similarity", name="evidencecategory"), nullable=False),
-        sa.Column("evaluation_type", sa.Enum("automated_test", "code_quality", "structural_complexity", "manual", name="evaluationtype"), nullable=False),
+        sa.Column("category", category_enum, nullable=False),
+        sa.Column("evaluation_type", eval_enum, nullable=False),
         sa.Column("weight_percentage", sa.Float(), nullable=False),
         sa.Column("max_points", sa.Float(), nullable=False),
         sa.Column("config", sa.JSON(), nullable=True),
@@ -66,7 +67,7 @@ def upgrade() -> None:
         sa.Column("rubric_id", sa.Integer(), sa.ForeignKey("rubrics.id", ondelete="RESTRICT"), nullable=False),
         sa.Column("suggested_total_score", sa.Float(), server_default="0.0", nullable=False),
         sa.Column("final_total_score", sa.Float(), nullable=True),
-        sa.Column("status", sa.Enum("pending", "draft", "confirmed", name="gradestatus"), server_default="draft", nullable=False),
+        sa.Column("status", grade_enum, server_default="draft", nullable=False),
         sa.Column("feedback_summary", sa.Text(), nullable=True),
         sa.Column("graded_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("confirmed_by_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),

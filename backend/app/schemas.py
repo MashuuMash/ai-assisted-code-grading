@@ -343,6 +343,7 @@ class SubmissionGradeResponse(BaseModel):
     status: GradeStatus
     feedback_summary: str | None = None
     detailed_feedback: dict | None = None
+    feedback_source: str | None = None
     graded_at: datetime
     confirmed_by_id: int | None = None
     criterion_scores: list[CriterionScoreResponse] = []
@@ -381,6 +382,7 @@ class SimilarityReportResponse(BaseModel):
     assignment_id: int
     status: SimilarityStatus
     threshold_used: float
+    engine: str
     submission_count: int
     avg_similarity: float | None = None
     max_similarity: float | None = None
@@ -434,6 +436,7 @@ class SubmissionFeedbackResponse(BaseModel):
     final_total_score: float | None = None
     feedback_summary: str | None = None
     detailed_feedback: dict | None = None
+    feedback_source: str | None = None
     citations: list[str] = []
 
 
@@ -458,6 +461,4 @@ class BatchAiDetectionResponse(BaseModel):
     total_analyzed: int
     high_probability_count: int
     results: list[AiDetectionResponse] = []
-
-
 

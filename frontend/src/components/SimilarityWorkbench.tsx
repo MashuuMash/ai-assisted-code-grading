@@ -116,7 +116,7 @@ export const SimilarityWorkbench: React.FC<SimilarityWorkbenchProps> = ({
             Cohort Similarity & Academic Integrity
           </h3>
           <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">
-            JPlag / Winnowing
+            {selectedReport?.engine === 'jplag' ? 'JPlag 6.2' : 'Token winnowing'}
           </span>
         </div>
 

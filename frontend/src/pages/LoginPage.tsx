@@ -22,11 +22,6 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleUseDemoLecturer = () => {
-    setUsername('lecturer');
-    setPassword('LecturerPass123!');
-  };
-
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center px-4">
       <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
@@ -97,18 +92,9 @@ export const LoginPage: React.FC = () => {
           </button>
         </form>
 
-        <div className="mt-6 pt-5 border-t border-slate-800 text-center">
-          <p className="text-[11px] text-slate-500 mb-2">
-            Local Development Quick Fill:
-          </p>
-          <button
-            type="button"
-            onClick={handleUseDemoLecturer}
-            className="text-xs text-indigo-400 hover:text-indigo-300 underline font-mono"
-          >
-            Use Lecturer Demo Account (lecturer)
-          </button>
-        </div>
+        <p className="mt-6 pt-5 border-t border-slate-800 text-center text-[11px] text-slate-500">
+          For a local demo account, run the documented Compose smoke test and use the credentials it prints.
+        </p>
       </div>
     </div>
   );

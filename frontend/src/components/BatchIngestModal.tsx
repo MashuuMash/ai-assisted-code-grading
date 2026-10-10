@@ -42,7 +42,7 @@ export const BatchIngestModal: React.FC<BatchIngestModalProps> = ({
 
   const handleUpload = async () => {
     if (!selectedFile) {
-      setError('Please select a .zip archive or python source file.');
+      setError('Please select a .zip archive.');
       return;
     }
 
@@ -133,21 +133,21 @@ export const BatchIngestModal: React.FC<BatchIngestModalProps> = ({
             <div className="space-y-3">
               <div className="grid grid-cols-3 gap-2">
                 <div className="p-2.5 bg-indigo-50 border border-indigo-100 rounded-lg text-center">
-                  <span className="text-[10px] uppercase font-bold text-indigo-600">Extracted</span>
+                  <span className="text-[10px] uppercase font-bold text-indigo-600">Found</span>
                   <div className="text-base font-black text-indigo-900 font-mono mt-0.5">
-                    {result.total_files_extracted}
+                    {result.total_found}
                   </div>
                 </div>
                 <div className="p-2.5 bg-emerald-50 border border-emerald-100 rounded-lg text-center">
                   <span className="text-[10px] uppercase font-bold text-emerald-600">Submissions</span>
                   <div className="text-base font-black text-emerald-900 font-mono mt-0.5">
-                    {result.submissions_created}
+                    {result.imported_count}
                   </div>
                 </div>
                 <div className="p-2.5 bg-slate-100 border border-slate-200 rounded-lg text-center">
-                  <span className="text-[10px] uppercase font-bold text-slate-500">Skipped</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-500">Failed</span>
                   <div className="text-base font-black text-slate-700 font-mono mt-0.5">
-                    {result.skipped_files}
+                    {result.failed_count}
                   </div>
                 </div>
               </div>
@@ -159,23 +159,19 @@ export const BatchIngestModal: React.FC<BatchIngestModalProps> = ({
                     <tr>
                       <th className="px-2.5 py-1.5 text-left">Student ID</th>
                       <th className="px-2.5 py-1.5 text-left">Filename</th>
-                      <th className="px-2.5 py-1.5 text-center">Status</th>
+                      <th className="px-2.5 py-1.5 text-center">Grading</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-mono">
-                    {result.results.map((r, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50">
-                        <td className="px-2.5 py-1 text-slate-800 font-semibold">{r.student_id}</td>
+                    {result.submissions.map((r) => (
+                      <tr key={r.submission_id} className="hover:bg-slate-50">
+                        <td className="px-2.5 py-1 text-slate-800 font-semibold">{r.student_identifier}</td>
                         <td className="px-2.5 py-1 text-slate-500 truncate max-w-[200px]">{r.filename}</td>
                         <td className="px-2.5 py-1 text-center">
                           <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                              r.status === 'created'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-slate-200 text-slate-600'
-                            }`}
+                            className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800"
                           >
-                            {r.status}
+                            {r.job_id ? 'Queued' : 'Imported'}
                           </span>
                         </td>
                       </tr>
@@ -183,6 +179,14 @@ export const BatchIngestModal: React.FC<BatchIngestModalProps> = ({
                   </tbody>
                 </table>
               </div>
+              {result.errors.length > 0 && (
+                <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800">
+                  <p className="font-semibold">Files that could not be imported</p>
+                  <ul className="mt-1 list-disc pl-4">
+                    {result.errors.map((message, index) => <li key={index}>{message}</li>)}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
         </div>

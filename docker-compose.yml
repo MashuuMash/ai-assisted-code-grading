@@ -22,14 +22,21 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://grading_user:${POSTGRES_PASSWORD:-postgres_dev_password}@postgres:5432/grading_db
+      DATABASE_URL: postgresql+psycopg2://grading_user:${POSTGRES_PASSWORD:-postgres_dev_password}@postgres:5432/grading_db
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
       SUBMISSION_STORAGE_PATH: /data/submissions
+      JPLAG_JAR_PATH: /tools/jplag-6.2.0.jar
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
     volumes:
       - ./backend:/app
+      - ./tools:/tools:ro
       - submission_data:/data/submissions
     command: ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
 
@@ -44,12 +51,12 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://grading_user:${POSTGRES_PASSWORD:-postgres_dev_password}@postgres:5432/grading_db
+      DATABASE_URL: postgresql+psycopg2://grading_user:${POSTGRES_PASSWORD:-postgres_dev_password}@postgres:5432/grading_db
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
       SUBMISSION_STORAGE_PATH: /data/submissions
       GRADING_SANDBOX_IMAGE: grading-sandbox:latest
     depends_on:
-      postgres:
+      backend:
         condition: service_healthy
       sandbox-image:
         condition: service_completed_successfully
@@ -57,7 +64,7 @@ services:
       - ./backend:/app
       - submission_data:/data/submissions:ro
       - /var/run/docker.sock:/var/run/docker.sock
-    command: ["sh", "-c", "alembic upgrade head && exec python -m app.worker"]
+    command: ["python", "-m", "app.worker"]
 
 volumes:
   postgres_data:

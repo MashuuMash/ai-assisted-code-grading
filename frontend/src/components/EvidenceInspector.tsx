@@ -121,7 +121,7 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({ evidence, 
               }`}
             >
               <Bot className="w-3.5 h-3.5" />
-              <span>AI CodeBERT ({codebertEvidence.length})</span>
+              <span>AI Style Signal ({codebertEvidence.length})</span>
             </button>
           )}
         </div>
@@ -193,7 +193,7 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({ evidence, 
                         <div className="mt-2 p-2 rounded bg-purple-50 border border-purple-200">
                           <div className="flex items-center justify-between text-[11px] mb-1">
                             <span className="font-semibold text-purple-900">
-                              Estimated AI Probability:
+                              Experimental style score:
                             </span>
                             <span className="font-mono font-bold text-purple-700">
                               {Math.round(item.metric_value * 100)}%

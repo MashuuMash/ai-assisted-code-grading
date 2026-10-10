@@ -147,7 +147,7 @@ export const api = {
       const formData = new FormData();
       formData.append('file', file);
       return request<BatchIngestResponse>(
-        `/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/batch-upload`,
+        `/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/submissions/batch-zip`,
         {
           method: 'POST',
           body: formData,
@@ -238,8 +238,28 @@ export const api = {
           body: JSON.stringify(data),
         }
       ),
-    exportGradebookCsvUrl: (courseId: number, classId: number, assignmentId: number): string =>
-      `${API_BASE}/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/gradebook-csv`,
+    downloadGradebookCsv: async (courseId: number, classId: number, assignmentId: number): Promise<void> => {
+      const token = getToken();
+      const response = await fetch(
+        `${API_BASE}/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/gradebook-csv`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      if (!response.ok) {
+        throw new ApiError(response.status, `Gradebook export failed (${response.status})`);
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      try {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `gradebook_assignment_${assignmentId}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    },
   },
 
   similarity: {

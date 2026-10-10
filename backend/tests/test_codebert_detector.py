@@ -45,8 +45,8 @@ def test_codebert_detector_empty_source():
     prediction = detector.predict("")
 
     assert prediction.ai_probability == 0.0
-    assert prediction.classification == "human"
-    assert prediction.confidence_score == 1.0
+    assert prediction.classification == "inconclusive"
+    assert prediction.confidence_score == 0.0
     assert "Empty source code" in prediction.signals
 
 
@@ -56,7 +56,7 @@ def test_codebert_detector_syntax_error():
     prediction = detector.predict(malformed_code)
 
     assert prediction.ai_probability <= 0.35
-    assert prediction.classification == "human"
+    assert prediction.classification == "inconclusive"
     assert any("Syntax error" in s for s in prediction.signals)
 
 

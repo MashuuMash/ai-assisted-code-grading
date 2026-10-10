@@ -1,5 +1,6 @@
 import hashlib
 import io
+import json
 import keyword
 import logging
 import os
@@ -8,6 +9,7 @@ import subprocess
 import tempfile
 import tokenize
 import uuid
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -268,7 +270,7 @@ def run_jplag_cli(
     base_code: str | None = None,
     jar_path: str | None = None,
 ) -> dict[tuple[int, int], PairwiseMatchResult] | None:
-    """Run official JPlag JAR CLI if configured and java executable is available."""
+    """Run JPlag and convert its 6.x report archive into pairwise results."""
     if not jar_path or not os.path.isfile(jar_path):
         return None
 
@@ -291,8 +293,12 @@ def run_jplag_cli(
             java_bin,
             "-jar",
             jar_path,
+            "--mode",
+            "RUN",
             "-l",
             "python3",
+            "-n",
+            "-1",
             "-r",
             str(tmp_path / "result"),
         ]
@@ -321,7 +327,35 @@ def run_jplag_cli(
                 )
                 return None
 
-            return None
+            archive_path = tmp_path / "result.jplag"
+            with zipfile.ZipFile(archive_path) as archive:
+                top_comparisons = json.loads(archive.read("topComparisons.json"))
+                results: dict[tuple[int, int], PairwiseMatchResult] = {}
+                for comparison in top_comparisons:
+                    first_id = int(comparison["firstSubmission"].removeprefix("sub_"))
+                    second_id = int(comparison["secondSubmission"].removeprefix("sub_"))
+                    detail_name = f"comparisons/{comparison['firstSubmission']}-{comparison['secondSubmission']}.json"
+                    if detail_name not in archive.namelist():
+                        detail_name = f"comparisons/{comparison['secondSubmission']}-{comparison['firstSubmission']}.json"
+                    detail = json.loads(archive.read(detail_name))
+                    matched_regions = [
+                        {
+                            "lines_a": [match["startInFirst"]["line"], match["endInFirst"]["line"]],
+                            "lines_b": [match["startInSecond"]["line"], match["endInSecond"]["line"]],
+                        }
+                        for match in detail.get("matches", [])
+                    ]
+                    results[tuple(sorted((first_id, second_id)))] = PairwiseMatchResult(
+                        similarity_percentage=round(float(comparison["similarities"]["AVG"]) * 100, 2),
+                        matched_tokens=sum(int(match["lengthOfFirst"]) for match in detail.get("matches", [])),
+                        matched_regions=matched_regions,
+                    )
+
+                expected_pairs = len(submissions) * (len(submissions) - 1) // 2
+                if len(results) != expected_pairs:
+                    logger.warning("JPlag exported %d of %d expected comparisons; using winnowing", len(results), expected_pairs)
+                    return None
+                return results
         except Exception as ex:
             logger.warning("JPlag CLI execution failed: %s", ex)
             return None
@@ -416,6 +450,7 @@ def run_similarity_for_assignment(
                 base_code=base_code,
                 jar_path=settings.jplag_jar_path,
             )
+        report.engine = "jplag" if cli_results is not None else "winnowing"
 
         comparisons: list[SimilarityComparison] = []
         n = len(target_submissions)
@@ -428,7 +463,7 @@ def run_similarity_for_assignment(
                 sub_b = target_submissions[j]
                 source_b = sources_map.get(sub_b.id, "")
 
-                if cli_results and (sub_a.id, sub_b.id) in cli_results:
+                if cli_results is not None:
                     match_result = cli_results[(sub_a.id, sub_b.id)]
                 else:
                     match_result = calculate_token_similarity(
@@ -473,6 +508,7 @@ def run_similarity_for_assignment(
                             "matched_submission_id": sub_b.id,
                             "similarity_percentage": match_result.similarity_percentage,
                             "matched_tokens": match_result.matched_tokens,
+                            "engine": report.engine,
                         },
                     )
                     ev_b = SubmissionEvidence(
@@ -493,6 +529,7 @@ def run_similarity_for_assignment(
                             "matched_submission_id": sub_a.id,
                             "similarity_percentage": match_result.similarity_percentage,
                             "matched_tokens": match_result.matched_tokens,
+                            "engine": report.engine,
                         },
                     )
                     db.add(ev_a)

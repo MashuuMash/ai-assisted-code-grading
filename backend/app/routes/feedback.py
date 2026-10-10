@@ -107,6 +107,7 @@ def generate_feedback_draft(
         final_total_score=grade.final_total_score,
         feedback_summary=grade.feedback_summary,
         detailed_feedback=grade.detailed_feedback,
+        feedback_source=grade.feedback_source,
         citations=citations,
     )
 
@@ -156,6 +157,7 @@ def get_submission_feedback(
         final_total_score=grade.final_total_score,
         feedback_summary=grade.feedback_summary,
         detailed_feedback=grade.detailed_feedback,
+        feedback_source=grade.feedback_source,
         citations=citations,
     )
 
@@ -218,6 +220,7 @@ def update_submission_feedback(
         final_total_score=grade.final_total_score,
         feedback_summary=grade.feedback_summary,
         detailed_feedback=grade.detailed_feedback,
+        feedback_source=grade.feedback_source,
         citations=citations,
     )
 

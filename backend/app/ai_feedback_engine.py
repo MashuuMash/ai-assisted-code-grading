@@ -387,11 +387,13 @@ def generate_feedback_for_submission(
     provider = settings.ai_provider.lower()
     model = model_override or settings.ai_model
     feedback_payload: DetailedFeedbackPayload | None = None
+    feedback_source = "rules"
 
     if provider == "gemini" and settings.gemini_api_key:
         try:
             raw_dict = _call_gemini_api(user_prompt, settings.gemini_api_key, model)
             feedback_payload = _validate_and_sanitize_feedback(raw_dict, valid_evidence_map)
+            feedback_source = "gemini"
         except Exception as ex:
             logger.warning("Gemini API call failed (%s); falling back to mock provider", ex)
 
@@ -404,6 +406,7 @@ def generate_feedback_for_submission(
                 model,
             )
             feedback_payload = _validate_and_sanitize_feedback(raw_dict, valid_evidence_map)
+            feedback_source = "openai"
         except Exception as ex:
             logger.warning("OpenAI API call failed (%s); falling back to mock provider", ex)
 
@@ -417,6 +420,7 @@ def generate_feedback_for_submission(
     if submission_grade:
         submission_grade.feedback_summary = markdown_summary
         submission_grade.detailed_feedback = feedback_payload.model_dump()
+        submission_grade.feedback_source = feedback_source
         if submission_grade.status == GradeStatus.PENDING:
             submission_grade.status = GradeStatus.DRAFT
     else:
@@ -428,6 +432,7 @@ def generate_feedback_for_submission(
             status=GradeStatus.DRAFT,
             feedback_summary=markdown_summary,
             detailed_feedback=feedback_payload.model_dump(),
+            feedback_source=feedback_source,
         )
         db.add(submission_grade)
 

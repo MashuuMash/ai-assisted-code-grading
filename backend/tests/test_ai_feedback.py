@@ -292,6 +292,7 @@ def test_feedback_api_lifecycle(
     assert "feedback_summary" in data
     assert data["detailed_feedback"] is not None
     assert "summary" in data["detailed_feedback"]
+    assert data["feedback_source"] == "rules"
 
     # 6. Retrieve feedback
     res_get = client.get(
@@ -300,6 +301,7 @@ def test_feedback_api_lifecycle(
     )
     assert res_get.status_code == 200
     assert res_get.json()["submission_id"] == sub.id
+    assert res_get.json()["feedback_source"] == "rules"
 
     # 7. Student cannot view feedback endpoint
     res_stud_view = client.get(
@@ -322,6 +324,7 @@ def test_feedback_api_lifecycle(
     updated = res_put.json()
     assert updated["feedback_summary"] == custom_summary
     assert updated["status"] == "confirmed"
+    assert updated["feedback_source"] == "rules"
 
     # Verify confirmation in DB
     grade = db.scalar(select(SubmissionGrade).where(SubmissionGrade.submission_id == sub.id))

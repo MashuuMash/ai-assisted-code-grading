@@ -165,6 +165,7 @@ export interface SubmissionGrade {
   status: GradeStatus;
   feedback_summary?: string | null;
   detailed_feedback?: DetailedFeedbackPayload | null;
+  feedback_source?: 'rules' | 'gemini' | 'openai' | null;
   graded_at: string;
   confirmed_by_id?: number | null;
   criterion_scores: CriterionScore[];
@@ -190,6 +191,7 @@ export interface SimilarityReport {
   assignment_id: number;
   status: SimilarityStatus;
   threshold_used: number;
+  engine: string;
   submission_count: number;
   avg_similarity?: number | null;
   max_similarity?: number | null;
@@ -201,15 +203,16 @@ export interface SimilarityReport {
 }
 
 export interface BatchIngestResponse {
-  total_files_extracted: number;
-  submissions_created: number;
-  skipped_files: number;
-  results: Array<{
+  total_found: number;
+  imported_count: number;
+  failed_count: number;
+  submissions: Array<{
+    submission_id: number;
+    student_identifier: string;
+    student_name: string | null;
     filename: string;
-    student_id: string;
-    student_name?: string | null;
-    status: string;
-    submission_id?: number | null;
-    error?: string | null;
+    size_bytes: number;
+    job_id: number | null;
   }>;
+  errors: string[];
 }

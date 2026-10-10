@@ -33,7 +33,7 @@ def upgrade() -> None:
         "similarity_reports",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("assignment_id", sa.Integer(), sa.ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("status", sa.Enum("queued", "running", "completed", "failed", name="similaritystatus"), server_default="queued", nullable=False),
+        sa.Column("status", sim_status_enum, server_default="queued", nullable=False),
         sa.Column("threshold_used", sa.Float(), server_default="50.0", nullable=False),
         sa.Column("submission_count", sa.Integer(), server_default="0", nullable=False),
         sa.Column("avg_similarity", sa.Float(), nullable=True),
@@ -54,7 +54,7 @@ def upgrade() -> None:
         sa.Column("submission_b_id", sa.Integer(), sa.ForeignKey("submissions.id", ondelete="CASCADE"), nullable=False),
         sa.Column("similarity_percentage", sa.Float(), nullable=False),
         sa.Column("matched_tokens", sa.Integer(), server_default="0", nullable=False),
-        sa.Column("status", sa.Enum("unreviewed", "flagged", "dismissed", name="comparisonreviewstatus"), server_default="unreviewed", nullable=False),
+        sa.Column("status", comp_status_enum, server_default="unreviewed", nullable=False),
         sa.Column("matched_regions", sa.JSON(), nullable=True),
         sa.Column("review_notes", sa.Text(), nullable=True),
     )

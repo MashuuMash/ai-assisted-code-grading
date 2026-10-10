@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
 from app.authorization import can_manage_class, can_view_class
-from app.batch_ingestion import ingest_batch_zip
+from app.batch_ingestion import MAX_ZIP_SIZE, ingest_batch_zip
 from app.database import get_db
 from app.models import (
     Assignment,
@@ -382,7 +382,7 @@ def batch_upload_submissions(
         )
 
     try:
-        archive_bytes = file.file.read()
+        archive_bytes = file.file.read(MAX_ZIP_SIZE + 1)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -437,4 +437,3 @@ def get_submission_evidence(
         ).all()
     )
     return records
-
