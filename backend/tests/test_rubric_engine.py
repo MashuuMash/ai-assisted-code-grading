@@ -194,7 +194,16 @@ def test_rubric_api_and_gradebook_export(client, lecturer_token, lecturer_user, 
     rubric_data = create_resp.json()
     assert rubric_data["title"] == "Grading Rubric"
     assert len(rubric_data["criteria"]) == 2
-    crit_id_test = rubric_data["criteria"][0]["id"]
+    rubric_url = f"/api/v1/courses/{course.id}/classes/{cohort.id}/assignments/{assignment.id}/rubric"
+    pregrade_update = client.put(
+        rubric_url,
+        headers=headers,
+        json={"title": "Updated Rubric", "criteria": rubric_payload["criteria"]},
+    )
+    assert pregrade_update.status_code == 200
+    assert pregrade_update.json()["title"] == "Updated Rubric"
+    assert len(pregrade_update.json()["criteria"]) == 2
+    crit_id_test = pregrade_update.json()["criteria"][0]["id"]
 
     # 2. Add submission & evidence
     sub = Submission(
@@ -221,6 +230,14 @@ def test_rubric_api_and_gradebook_export(client, lecturer_token, lecturer_user, 
     # 70% of 10.0 is 7.0 for tests, 30% of 10.0 is 3.0 for clean code -> total 10.0
     assert eval_data["suggested_total_score"] == 10.0
 
+    protected_update = client.put(
+        rubric_url,
+        headers=headers,
+        json={"max_score": 20.0},
+    )
+    assert protected_update.status_code == 409
+    assert client.get(rubric_url, headers=headers).json()["max_score"] == 10.0
+
     # 4. Override grade via API
     override_payload = {
         "final_total_score": 9.5,
@@ -243,6 +260,12 @@ def test_rubric_api_and_gradebook_export(client, lecturer_token, lecturer_user, 
     grade_data = put_resp.json()
     assert grade_data["final_total_score"] == 9.5
     assert grade_data["status"] == "confirmed"
+    roster = client.get(
+        f"/api/v1/courses/{course.id}/classes/{cohort.id}/assignments/{assignment.id}/submissions",
+        headers=headers,
+    ).json()
+    assert roster[0]["grade"]["status"] == "confirmed"
+    assert roster[0]["grade"]["final_total_score"] == 9.5
 
     # 5. Export Gradebook CSV via API
     csv_resp = client.get(
@@ -261,3 +284,10 @@ def test_rubric_api_and_gradebook_export(client, lecturer_token, lecturer_user, 
     assert "Final Score" in header
     assert rows[1][1] == "SV9999"
     assert rows[1][2] == "Alice Smith"
+
+    base = f"/api/v1/courses/{course.id}/classes/{cohort.id}/assignments/{assignment.id}/submissions/{sub.id}"
+    assert client.post(f"{base}/grade", headers=headers).status_code == 202
+    refreshed = client.get(f"{base}/grade", headers=headers).json()
+    assert refreshed["status"] == "draft"
+    assert refreshed["final_total_score"] == 9.5
+    assert client.put(f"{base}/grade", headers=headers, json=override_payload).status_code == 409

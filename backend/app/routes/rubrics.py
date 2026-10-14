@@ -13,6 +13,8 @@ from app.models import (
     Assignment,
     Cohort,
     CriterionScore,
+    GradingJob,
+    GradingJobStatus,
     Rubric,
     RubricCriterion,
     Submission,
@@ -151,6 +153,16 @@ def update_assignment_rubric(
     if not rubric:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rubric not found")
 
+    if rubric_in.criteria is not None or rubric_in.max_score is not None:
+        has_grades = db.scalar(
+            select(SubmissionGrade.id).where(SubmissionGrade.rubric_id == rubric.id).limit(1)
+        )
+        if has_grades is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot change rubric criteria or max score after grading has started",
+            )
+
     if rubric_in.title is not None:
         rubric.title = rubric_in.title
     if rubric_in.description is not None:
@@ -259,6 +271,17 @@ def override_submission_grade(
     cohort, _ = _get_cohort_and_assignment(course_id, class_id, assignment_id, db)
     if not can_manage_class(current_user, cohort):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    submission = db.scalar(select(Submission).where(
+        Submission.id == submission_id, Submission.assignment_id == assignment_id,
+    ).with_for_update())
+    if submission is None:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    if db.scalar(select(GradingJob.id).where(
+        GradingJob.submission_id == submission_id,
+        GradingJob.status.in_([GradingJobStatus.QUEUED, GradingJobStatus.RUNNING]),
+    ).limit(1)) is not None:
+        raise HTTPException(status_code=409, detail="Wait for the active grading job before saving or confirming a grade")
 
     grade = db.scalar(
         select(SubmissionGrade)

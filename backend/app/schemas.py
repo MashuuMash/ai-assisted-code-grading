@@ -157,6 +157,14 @@ class AssignmentResponse(AssignmentBase):
     updated_at: datetime
 
 
+class SubmissionGradeSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    status: GradeStatus
+    suggested_total_score: float
+    final_total_score: float | None = None
+
+
 class SubmissionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -170,6 +178,7 @@ class SubmissionResponse(BaseModel):
     sha256: str
     submitted_at: datetime
     student: UserResponse | None = None
+    grade: SubmissionGradeSummary | None = None
 
 
 class BatchUploadItem(BaseModel):

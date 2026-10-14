@@ -11,9 +11,11 @@ from app.models import (
     Assignment,
     Cohort,
     Course,
+    GradeStatus,
     GradingJob,
     GradingJobStatus,
     Submission,
+    SubmissionGrade,
     TestCase,
     TestResult,
     TestVisibility,
@@ -168,8 +170,16 @@ def update_test_case(
 
     tc = get_test_case_or_404(assignment_id, test_case_id, db)
     if tc_in.name is not None:
+        duplicate = db.scalar(select(TestCase.id).where(
+            TestCase.assignment_id == assignment_id,
+            TestCase.name == tc_in.name, TestCase.id != test_case_id,
+        ))
+        if duplicate is not None:
+            raise HTTPException(status_code=400, detail="A test case with this name already exists for this assignment")
         tc.name = tc_in.name
     if tc_in.visibility is not None:
+        if tc_in.visibility != tc.visibility and db.scalar(select(TestResult.id).where(TestResult.test_case_id == tc.id).limit(1)) is not None:
+            raise HTTPException(status_code=409, detail="Visibility cannot change after grading results exist. Create a new test instead.")
         tc.visibility = tc_in.visibility
     if tc_in.content is not None:
         tc.content = tc_in.content
@@ -193,6 +203,8 @@ def delete_test_case(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     tc = get_test_case_or_404(assignment_id, test_case_id, db)
+    if db.scalar(select(TestResult.id).where(TestResult.test_case_id == tc.id).limit(1)) is not None:
+        raise HTTPException(status_code=409, detail="This test has saved grading results and cannot be deleted. Edit its content and rerun grading instead.")
     db.delete(tc)
     db.commit()
 
@@ -208,7 +220,7 @@ def queue_grading_job(
 ) -> GradingJobResponse:
     _, cohort, _ = get_assignment_context(course_id, class_id, assignment_id, db)
     submission = db.scalar(
-        select(Submission).where(Submission.id == submission_id, Submission.assignment_id == assignment_id)
+        select(Submission).where(Submission.id == submission_id, Submission.assignment_id == assignment_id).with_for_update()
     )
     if not submission:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
@@ -217,11 +229,22 @@ def queue_grading_job(
     if not is_privileged and submission.student_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
+    active = db.scalar(select(GradingJob.id).where(
+        GradingJob.submission_id == submission_id,
+        GradingJob.status.in_([GradingJobStatus.QUEUED, GradingJobStatus.RUNNING]),
+    ).limit(1))
+    if active is not None:
+        raise HTTPException(status_code=409, detail="This submission already has a queued or running grading job")
+
     job = GradingJob(
         submission_id=submission_id,
         status=GradingJobStatus.QUEUED,
     )
     db.add(job)
+    grade = db.scalar(select(SubmissionGrade).where(SubmissionGrade.submission_id == submission_id))
+    if grade is not None:
+        grade.status = GradeStatus.DRAFT
+        grade.confirmed_by_id = None
     db.commit()
     db.refresh(job)
 
@@ -261,7 +284,7 @@ def list_grading_jobs(
         db.scalars(
             select(GradingJob)
             .where(GradingJob.submission_id == submission_id)
-            .order_by(GradingJob.created_at.desc())
+            .order_by(GradingJob.created_at.desc(), GradingJob.id.desc())
         ).all()
     )
 

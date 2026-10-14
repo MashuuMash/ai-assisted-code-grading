@@ -45,11 +45,31 @@ export interface Assignment {
   class_id: number;
   title: string;
   description?: string | null;
+  instructions?: string | null;
   status: AssignmentStatus;
   deadline?: string | null;
   base_code?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface TestCase {
+  id: number;
+  name: string;
+  visibility: 'public' | 'hidden';
+  content: string | null;
+}
+
+export interface GradingJob {
+  id: number;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'timeout';
+  created_at: string;
+  passed_tests: number;
+  total_tests: number;
+  failure_type?: string | null;
+  failure_information?: string | null;
+  runner_output?: string | null;
+  results: Array<{ id: number; test_name: string; outcome: string; failure_detail?: string | null }>;
 }
 
 export interface Submission {
@@ -63,7 +83,7 @@ export interface Submission {
   size_bytes: number;
   sha256: string;
   submitted_at: string;
-  grade?: SubmissionGrade | null;
+  grade?: Pick<SubmissionGrade, 'status' | 'suggested_total_score' | 'final_total_score'> | null;
 }
 
 export type EvidenceSource = 'pytest' | 'ruff' | 'ast' | 'jplag' | 'codebert';
@@ -114,6 +134,7 @@ export interface RubricCriterion {
   weight_percentage: number;
   max_points: number;
   order_index: number;
+  config?: Record<string, number> | null;
   penalty_per_error?: number | null;
   penalty_per_warning?: number | null;
   max_allowed_complexity?: number | null;

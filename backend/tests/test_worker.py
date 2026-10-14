@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from sqlalchemy.orm import Session
 
@@ -157,7 +157,10 @@ def test_process_job_timeout(db: Session) -> None:
         results=[],
     )
 
-    process_job(job.id, runner=mock_runner, db=db)
+    with patch("app.worker.persist_submission_evidence") as persist, patch("app.worker.evaluate_submission_grade") as evaluate:
+        process_job(job.id, runner=mock_runner, db=db)
+        persist.assert_not_called()
+        evaluate.assert_not_called()
 
     db.refresh(job)
     assert job.status == GradingJobStatus.TIMEOUT

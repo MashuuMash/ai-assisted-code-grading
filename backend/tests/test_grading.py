@@ -170,6 +170,10 @@ def test_queue_and_inspect_grading_job(
     assert queue_res.status_code == 202
     job_id = queue_res.json()["id"]
     assert queue_res.json()["status"] == GradingJobStatus.QUEUED.value
+    assert client.post(
+        f"/api/v1/courses/{c_id}/classes/{cl_id}/assignments/{a_id}/submissions/{sub_id}/grade",
+        headers=auth_headers(lecturer_token),
+    ).status_code == 409
 
     # Simulate completed worker results
     job = db.get(GradingJob, job_id)
@@ -229,3 +233,12 @@ def test_queue_and_inspect_grading_job(
     lec_hid_result = next(r for r in lec_view["results"] if r["test_case_id"] == tc_hid.id)
     assert lec_hid_result["test_name"] == "test_secret_edge_case"
     assert "Secret failure clue" in lec_hid_result["failure_detail"]
+
+    tests_url = f"/api/v1/courses/{c_id}/classes/{cl_id}/assignments/{a_id}/test-cases"
+    assert client.delete(f"{tests_url}/{tc_pub.id}", headers=auth_headers(lecturer_token)).status_code == 409
+    assert client.put(f"{tests_url}/{tc_pub.id}", headers=auth_headers(lecturer_token), json={"name": tc_hid.name}).status_code == 400
+    assert client.put(f"{tests_url}/{tc_hid.id}", headers=auth_headers(lecturer_token), json={"visibility": "public"}).status_code == 409
+    assert client.post(
+        f"/api/v1/courses/{c_id}/classes/{cl_id}/assignments/{a_id}/submissions/{sub_id}/grade",
+        headers=auth_headers(lecturer_token),
+    ).status_code == 202

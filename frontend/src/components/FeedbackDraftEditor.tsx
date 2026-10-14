@@ -28,13 +28,19 @@ export const FeedbackDraftEditor: React.FC<FeedbackDraftEditorProps> = ({
   const [editedSummary, setEditedSummary] = useState<string>(grade?.feedback_summary || '');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   const detailed: DetailedFeedbackPayload | null = grade?.detailed_feedback || null;
 
   const handleGenerateClick = async () => {
     setLoading(true);
+    setError(''); setNotice('');
     try {
       await onGenerate();
+      setNotice('Feedback generated. Review it before confirming.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not generate feedback. Please retry.');
     } finally {
       setLoading(false);
     }
@@ -42,9 +48,13 @@ export const FeedbackDraftEditor: React.FC<FeedbackDraftEditorProps> = ({
 
   const handleSaveClick = async (asConfirmed: boolean = false) => {
     setSaving(true);
+    setError(''); setNotice('');
     try {
       await onSaveFeedback(editedSummary, detailed, asConfirmed);
       setIsEditing(false);
+      setNotice(asConfirmed ? 'Feedback confirmed.' : 'Feedback draft saved.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save feedback. Your text is still here.');
     } finally {
       setSaving(false);
     }
@@ -52,8 +62,8 @@ export const FeedbackDraftEditor: React.FC<FeedbackDraftEditorProps> = ({
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 text-xs flex flex-col h-full overflow-hidden">
-      <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
-        <div className="flex items-center space-x-2">
+      <div className="flex flex-wrap gap-2 items-center justify-between pb-3 border-b border-slate-100 shrink-0">
+        <div className="flex flex-wrap gap-2 items-center">
           <Bot className="w-4 h-4 text-indigo-600" />
           <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
             Evidence-Grounded Feedback
@@ -73,7 +83,7 @@ export const FeedbackDraftEditor: React.FC<FeedbackDraftEditorProps> = ({
 
         <button
           onClick={handleGenerateClick}
-          disabled={loading}
+          disabled={loading || saving || isEditing || !grade}
           className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold inline-flex items-center space-x-1.5 transition-colors border border-indigo-200"
           title="Generate feedback from evidence; uses rule-based fallback when AI is unavailable"
         >
@@ -83,6 +93,9 @@ export const FeedbackDraftEditor: React.FC<FeedbackDraftEditorProps> = ({
       </div>
 
       <div className="flex-1 overflow-y-auto pt-3 space-y-3.5">
+        {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
+        {notice && <p role="status" className="text-sm text-slate-700">{notice}</p>}
+        {!grade && <p className="text-sm text-slate-600">Calculate a grade first to enable feedback.</p>}
         {/* Verified Strengths */}
         {detailed?.strengths && detailed.strengths.length > 0 && (
           <div className="p-3 bg-emerald-50/50 rounded-lg border border-emerald-100">
@@ -144,6 +157,7 @@ export const FeedbackDraftEditor: React.FC<FeedbackDraftEditorProps> = ({
             </label>
             {!isEditing && (
               <button
+                disabled={!grade || loading || saving}
                 onClick={() => {
                   setEditedSummary(grade?.feedback_summary || '');
                   setIsEditing(true);
@@ -158,6 +172,8 @@ export const FeedbackDraftEditor: React.FC<FeedbackDraftEditorProps> = ({
 
           {isEditing ? (
             <textarea
+              aria-label="Feedback summary"
+              disabled={saving}
               rows={8}
               value={editedSummary}
               onChange={(e) => setEditedSummary(e.target.value)}
@@ -176,6 +192,7 @@ export const FeedbackDraftEditor: React.FC<FeedbackDraftEditorProps> = ({
       {isEditing && (
         <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-end space-x-2 shrink-0">
           <button
+            disabled={saving}
             onClick={() => setIsEditing(false)}
             className="px-3 py-1.5 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium"
           >

@@ -124,6 +124,11 @@ def process_job(
             job.failed_tests = job.total_tests - job.passed_tests
             transition_job(job, GradingJobStatus.COMPLETED)
 
+        # Infrastructure failures are not evidence of an incorrect submission.
+        if job.status != GradingJobStatus.COMPLETED:
+            session.commit()
+            return
+
         # Static analysis and Evidence Engine integration
         static_report = StaticAnalyzer().analyze_file(source_path)
         test_vis_map = {t.id: t.visibility for t in tests}

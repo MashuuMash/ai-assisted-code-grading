@@ -15,6 +15,8 @@ import {
   SubmissionEvidence,
   SubmissionGrade,
   User,
+  TestCase,
+  GradingJob,
 } from '../types';
 
 const API_BASE = '/api/v1';
@@ -66,7 +68,8 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     let detailMessage = `Request failed with status ${res.status}`;
     try {
       const errData = await res.json();
-      detailMessage = errData.detail || detailMessage;
+      detailMessage = typeof errData.detail === 'string' ? errData.detail :
+        Array.isArray(errData.detail) ? errData.detail.map((item: { msg: string }) => item.msg).join('; ') : detailMessage;
     } catch {
       // Ignored
     }
@@ -135,6 +138,24 @@ export const api = {
       }),
     get: (courseId: number, classId: number, assignmentId: number): Promise<Assignment> =>
       request<Assignment>(`/courses/${courseId}/classes/${classId}/assignments/${assignmentId}`),
+    update: (courseId: number, classId: number, assignmentId: number, data: Partial<Assignment>): Promise<Assignment> =>
+      request<Assignment>(`/courses/${courseId}/classes/${classId}/assignments/${assignmentId}`, {
+        method: 'PUT', body: JSON.stringify(data),
+      }),
+  },
+
+  tests: {
+    list: (base: string) => request<TestCase[]>(`${base}/test-cases`),
+    save: (base: string, data: Omit<TestCase, 'id'>, id?: number) => request<TestCase>(
+      `${base}/test-cases${id === undefined ? '' : `/${id}`}`,
+      { method: id === undefined ? 'POST' : 'PUT', body: JSON.stringify(data) },
+    ),
+    remove: (base: string, id: number) => request<void>(`${base}/test-cases/${id}`, { method: 'DELETE' }),
+  },
+  jobs: {
+    list: (base: string, submissionId: number) => request<GradingJob[]>(`${base}/submissions/${submissionId}/jobs`),
+    get: (base: string, submissionId: number, id: number) => request<GradingJob>(`${base}/submissions/${submissionId}/jobs/${id}`),
+    queue: (base: string, submissionId: number) => request<GradingJob>(`${base}/submissions/${submissionId}/grade`, { method: 'POST' }),
   },
 
   batch: {
@@ -198,6 +219,11 @@ export const api = {
     create: (courseId: number, classId: number, assignmentId: number, data: any): Promise<Rubric> =>
       request<Rubric>(`/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/rubric`, {
         method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    update: (courseId: number, classId: number, assignmentId: number, data: any): Promise<Rubric> =>
+      request<Rubric>(`/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/rubric`, {
+        method: 'PUT',
         body: JSON.stringify(data),
       }),
     evaluateGrade: (

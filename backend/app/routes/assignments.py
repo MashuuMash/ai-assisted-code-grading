@@ -164,7 +164,7 @@ def update_assignment(
         assignment.instructions = assignment_in.instructions
     if assignment_in.language is not None:
         assignment.language = assignment_in.language
-    if assignment_in.deadline is not None:
+    if "deadline" in assignment_in.model_fields_set:
         assignment.deadline = assignment_in.deadline
     if assignment_in.status is not None:
         assignment.status = assignment_in.status
@@ -273,7 +273,7 @@ def list_submissions(
         return list(
             db.scalars(
                 select(Submission)
-                .options(joinedload(Submission.student))
+                .options(joinedload(Submission.student), joinedload(Submission.grade))
                 .where(Submission.assignment_id == assignment_id)
                 .order_by(Submission.submitted_at.desc())
             ).all()
@@ -283,7 +283,7 @@ def list_submissions(
     return list(
         db.scalars(
             select(Submission)
-            .options(joinedload(Submission.student))
+            .options(joinedload(Submission.student), joinedload(Submission.grade))
             .where(
                 Submission.assignment_id == assignment_id,
                 Submission.student_id == current_user.id,

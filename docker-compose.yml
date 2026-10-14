@@ -5,8 +5,6 @@ services:
       POSTGRES_DB: grading_db
       POSTGRES_USER: grading_user
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_password}
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -20,7 +18,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     environment:
       DATABASE_URL: postgresql+psycopg2://grading_user:${POSTGRES_PASSWORD:-postgres_dev_password}@postgres:5432/grading_db
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
@@ -34,11 +32,12 @@ services:
       interval: 5s
       timeout: 3s
       retries: 12
+      start_period: 120s
     volumes:
       - ./backend:/app
       - ./tools:/tools:ro
       - submission_data:/data/submissions
-    command: ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
+    command: ["python", "-m", "app.startup"]
 
   sandbox-image:
     build:

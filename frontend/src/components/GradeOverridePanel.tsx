@@ -20,20 +20,22 @@ export const GradeOverridePanel: React.FC<GradeOverridePanelProps> = ({
   const [overrides, setOverrides] = useState<Record<number, { score: number; justification: string }>>({});
   const [saving, setSaving] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const evaluate = async () => {
+    setEvaluating(true); setError(''); setNotice('');
+    try { await onEvaluate(); setOverrides({}); setNotice('Suggested grade recalculated.'); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Could not calculate grade. Please retry.'); }
+    finally { setEvaluating(false); }
+  };
 
   if (!grade) {
     return (
       <div className="bg-white p-5 rounded-xl border border-slate-200 text-center">
         <p className="text-xs text-slate-500 mb-3">No mathematical grade calculated yet.</p>
+        {error && <p role="alert" className="mb-3 text-sm text-rose-700">{error}</p>}
         <button
-          onClick={async () => {
-            setEvaluating(true);
-            try {
-              await onEvaluate();
-            } finally {
-              setEvaluating(false);
-            }
-          }}
+          onClick={evaluate}
           disabled={evaluating}
           className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold inline-flex items-center space-x-1.5 transition-colors shadow-sm"
         >
@@ -59,7 +61,7 @@ export const GradeOverridePanel: React.FC<GradeOverridePanelProps> = ({
     setOverrides((prev) => ({
       ...prev,
       [critId]: {
-        score: prev[critId]?.score ?? 0,
+        score: prev[critId]?.score ?? grade.criterion_scores.find(cs => cs.criterion_id === critId)?.final_score ?? 0,
         justification: text,
       },
     }));
@@ -67,6 +69,7 @@ export const GradeOverridePanel: React.FC<GradeOverridePanelProps> = ({
 
   const handleSaveOverrides = async (asConfirmed: boolean = false) => {
     setSaving(true);
+    setError(''); setNotice('');
     try {
       const critOverrides = Object.entries(overrides).map(([cid, data]) => ({
         criterion_id: Number(cid),
@@ -80,6 +83,10 @@ export const GradeOverridePanel: React.FC<GradeOverridePanelProps> = ({
       };
 
       await onOverride(payload);
+      setOverrides({});
+      setNotice(asConfirmed ? 'Grade confirmed.' : 'Draft saved.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save grade. Your edits are still here.');
     } finally {
       setSaving(false);
     }
@@ -101,7 +108,7 @@ export const GradeOverridePanel: React.FC<GradeOverridePanelProps> = ({
                 : grade.suggested_total_score.toFixed(2)}
             </span>
             <span className="text-xs text-slate-400 font-mono">
-              / 10.00 pts
+              / {grade.criterion_scores.reduce((total, score) => total + (score.criterion?.max_points || 0), 0).toFixed(2)} pts
             </span>
             <span
               className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
@@ -116,15 +123,9 @@ export const GradeOverridePanel: React.FC<GradeOverridePanelProps> = ({
         </div>
 
         <button
-          onClick={async () => {
-            setEvaluating(true);
-            try {
-              await onEvaluate();
-            } finally {
-              setEvaluating(false);
-            }
-          }}
-          disabled={evaluating}
+          onClick={evaluate}
+          disabled={evaluating || saving}
+          aria-label="Recalculate suggested grade"
           className="text-slate-500 hover:text-indigo-600 p-1.5 rounded-lg border border-slate-200 hover:border-indigo-200 transition-colors"
           title="Recalculate mathematical score from evidence"
         >
@@ -133,6 +134,8 @@ export const GradeOverridePanel: React.FC<GradeOverridePanelProps> = ({
       </div>
 
       {/* Criteria breakdown */}
+      {error && <p role="alert" className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
+      {notice && <p role="status" className="mt-3 text-sm text-slate-700">{notice}</p>}
       <div className="mt-3 space-y-3">
         {grade.criterion_scores.map((cs) => {
           const crit = cs.criterion;
@@ -152,6 +155,8 @@ export const GradeOverridePanel: React.FC<GradeOverridePanelProps> = ({
                 </div>
                 <div className="flex items-center space-x-1 font-mono">
                   <input
+                    aria-label={`Score for ${crit?.title || 'criterion'}`}
+                    disabled={saving || evaluating}
                     type="number"
                     step="0.1"
                     min="0"
@@ -173,6 +178,8 @@ export const GradeOverridePanel: React.FC<GradeOverridePanelProps> = ({
               {/* Justification input if overridden */}
               <div className="mt-1.5">
                 <input
+                  aria-label={`Justification for ${crit?.title || 'criterion'}`}
+                  disabled={saving || evaluating}
                   type="text"
                   placeholder="Override justification (optional)..."
                   value={overrides[critId]?.justification || ''}
@@ -189,7 +196,7 @@ export const GradeOverridePanel: React.FC<GradeOverridePanelProps> = ({
       <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-end space-x-2">
         <button
           onClick={() => handleSaveOverrides(false)}
-          disabled={saving}
+          disabled={saving || evaluating}
           className="px-3 py-1.5 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors inline-flex items-center space-x-1.5"
         >
           <Save className="w-3.5 h-3.5" />
@@ -198,7 +205,7 @@ export const GradeOverridePanel: React.FC<GradeOverridePanelProps> = ({
 
         <button
           onClick={() => handleSaveOverrides(true)}
-          disabled={saving}
+          disabled={saving || evaluating}
           className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold transition-colors inline-flex items-center space-x-1.5 shadow-sm"
         >
           <CheckCircle className="w-3.5 h-3.5" />
