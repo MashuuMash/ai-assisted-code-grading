@@ -241,7 +241,11 @@ def _call_gemini_api(
     model: str,
 ) -> dict[str, Any]:
     """Call Google Gemini REST API using httpx."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    headers = {
+        "x-goog-api-key": api_key,
+        "Content-Type": "application/json",
+    }
     payload = {
         "contents": [
             {
@@ -257,7 +261,7 @@ def _call_gemini_api(
     }
 
     with httpx.Client(timeout=30.0) as client:
-        resp = client.post(url, json=payload)
+        resp = client.post(url, json=payload, headers=headers)
         resp.raise_for_status()
         data = resp.json()
 
@@ -385,7 +389,10 @@ def generate_feedback_for_submission(
     )
 
     provider = settings.ai_provider.lower()
-    model = model_override or settings.ai_model
+    raw_model = model_override or settings.ai_model
+    if not re.match(r"^[a-zA-Z0-9._-]+$", raw_model):
+        raise ValueError(f"Invalid AI model name format: {raw_model}")
+    model = raw_model
     feedback_payload: DetailedFeedbackPayload | None = None
     feedback_source = "rules"
 

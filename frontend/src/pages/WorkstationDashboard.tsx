@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Archive,
   BookOpen,
@@ -208,7 +208,7 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
   }, [selectedCourseId, selectedClassId]);
 
   // 4. Assignment changed: load submissions & rubric
-  const loadAssignmentData = async () => {
+  const loadAssignmentData = useCallback(async () => {
     const requestId = ++assignmentRequestId.current;
     if (!selectedCourseId || !selectedClassId || !selectedAssignmentId) {
       setSubmissions([]);
@@ -238,14 +238,14 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
     } finally {
       if (requestId === assignmentRequestId.current) setLoadingList(false);
     }
-  };
+  }, [selectedCourseId, selectedClassId, selectedAssignmentId]);
 
   useEffect(() => {
     loadAssignmentData();
-  }, [selectedCourseId, selectedClassId, selectedAssignmentId]);
+  }, [loadAssignmentData]);
 
   // 5. Selected Submission changed: load code, evidence, and grade
-  const loadSubmissionDetail = async () => {
+  const loadSubmissionDetail = useCallback(async () => {
     const requestId = ++detailRequestId.current;
     if (
       !selectedCourseId ||
@@ -292,11 +292,11 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
     } finally {
       if (requestId === detailRequestId.current) setLoadingDetail(false);
     }
-  };
+  }, [selectedCourseId, selectedClassId, selectedAssignmentId, selectedSubmissionId]);
 
   useEffect(() => {
     loadSubmissionDetail();
-  }, [selectedSubmissionId]);
+  }, [loadSubmissionDetail]);
 
   // Handlers
   const handleEvaluateGrade = async () => {
@@ -606,7 +606,7 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
   return (
     <div
       data-testid="workstation-dashboard"
-      className="min-h-dvh bg-surface dark:bg-[#111c2d] flex flex-col font-sans text-on-surface dark:text-[#f9f9ff] w-full max-w-full overflow-x-hidden transition-colors"
+      className="min-h-dvh bg-[#FCF0DA] dark:bg-[#2C2623] flex flex-col font-sans text-[#4C4541] dark:text-[#FCF0DA] w-full max-w-full overflow-x-hidden transition-colors"
     >
       <Navbar onOpenShortcuts={() => setIsShortcutsModalOpen(true)} />
       {isDemoMode && (
@@ -626,12 +626,12 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
       )}
 
       {/* Top Selector Ribbon */}
-      <div className="bg-surface-container-lowest dark:bg-[#1e1e24] border-b border-surface-container-high/60 px-6 py-2.5 shadow-xs">
+      <div className="bg-[#FFFDF9] dark:bg-[#38322E] border-b border-[#AEAC78]/40 dark:border-[#AEAC78]/30 px-6 py-2.5 shadow-xs">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex flex-wrap items-center gap-3 text-sm min-w-0">
             {/* Course Selector */}
             <div className="flex items-center space-x-1.5">
-              <GraduationCap className="w-4 h-4 text-secondary" />
+              <GraduationCap className="w-4 h-4 text-[#AEAC78] dark:text-[#F2C46A]" />
               <select
                 aria-label="Selected course"
                 value={selectedCourseId || ''}
@@ -641,21 +641,21 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                   setSelectedAssignmentId(null);
                   setSelectedCourseId(Number(e.target.value));
                 }}
-                className="bg-surface-container-low dark:bg-[#263143] border border-surface-container-high font-bold text-on-surface dark:text-[#f9f9ff] py-1 px-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container transition-all duration-200"
+                className="bg-[#FCF0DA]/40 dark:bg-[#2C2623] border border-[#AEAC78]/50 font-bold text-[#4C4541] dark:text-[#FCF0DA] py-1 px-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F2C46A] transition-all duration-200"
               >
                 {courses.map((c) => (
-                  <option key={c.id} value={c.id} className="bg-surface-container-lowest dark:bg-[#38322E] text-on-surface dark:text-[#f9f9ff]">
+                  <option key={c.id} value={c.id} className="bg-[#FFFDF9] dark:bg-[#38322E] text-[#4C4541] dark:text-[#FCF0DA]">
                     {c.code} - {c.name}
                   </option>
                 ))}
               </select>
             </div>
 
-            <span className="text-outline-variant font-mono">/</span>
+            <span className="text-[#AEAC78] font-mono">/</span>
 
             {/* Class Cohort Selector */}
             <div className="flex items-center space-x-1.5">
-              <Users className="w-4 h-4 text-secondary" />
+              <Users className="w-4 h-4 text-[#AEAC78] dark:text-[#F2C46A]" />
               <select
                 aria-label="Selected class"
                 value={selectedClassId || ''}
@@ -664,21 +664,21 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                   setSelectedAssignmentId(null);
                   setSelectedClassId(Number(e.target.value));
                 }}
-                className="bg-surface-container-low dark:bg-[#263143] border border-surface-container-high font-bold text-on-surface dark:text-[#f9f9ff] py-1 px-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container transition-all duration-200"
+                className="bg-[#FCF0DA]/40 dark:bg-[#2C2623] border border-[#AEAC78]/50 font-bold text-[#4C4541] dark:text-[#FCF0DA] py-1 px-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F2C46A] transition-all duration-200"
               >
                 {classes.map((cl) => (
-                  <option key={cl.id} value={cl.id} className="bg-surface-container-lowest dark:bg-[#38322E] text-on-surface dark:text-[#f9f9ff]">
+                  <option key={cl.id} value={cl.id} className="bg-[#FFFDF9] dark:bg-[#38322E] text-[#4C4541] dark:text-[#FCF0DA]">
                     {cl.name} ({cl.semester} {cl.year})
                   </option>
                 ))}
               </select>
             </div>
 
-            <span className="text-outline-variant font-mono">/</span>
+            <span className="text-[#AEAC78] font-mono">/</span>
 
             {/* Assignment Selector */}
             <div className="flex items-center space-x-1.5">
-              <BookOpen className="w-4 h-4 text-primary" />
+              <BookOpen className="w-4 h-4 text-[#AEAC78] dark:text-[#F2C46A]" />
               <select
                 aria-label="Selected assignment"
                 value={selectedAssignmentId || ''}
@@ -686,10 +686,10 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                   clearAssignmentView();
                   setSelectedAssignmentId(Number(e.target.value));
                 }}
-                className="bg-surface-container-low dark:bg-[#263143] border border-surface-container-high font-bold text-on-surface dark:text-[#f9f9ff] py-1 px-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-container transition-all duration-200 max-w-xs"
+                className="bg-[#FCF0DA]/40 dark:bg-[#2C2623] border border-[#AEAC78]/50 font-bold text-[#4C4541] dark:text-[#FCF0DA] py-1 px-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F2C46A] transition-all duration-200 max-w-xs"
               >
                 {assignments.map((a) => (
-                  <option key={a.id} value={a.id} className="bg-surface-container-lowest dark:bg-[#38322E] text-on-surface dark:text-[#f9f9ff]">
+                  <option key={a.id} value={a.id} className="bg-[#FFFDF9] dark:bg-[#38322E] text-[#4C4541] dark:text-[#FCF0DA]">
                     {a.title} ({a.status})
                   </option>
                 ))}
@@ -702,28 +702,28 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
             <button
               onClick={() => setIsBatchModalOpen(true)}
               disabled={!selectedAssignmentId}
-              className="px-3 py-1.5 bg-surface-container hover:bg-surface-container-high text-on-surface dark:text-[#f9f9ff] rounded-lg text-xs font-semibold inline-flex items-center space-x-1.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-95 border border-surface-container-high/50 shadow-xs cursor-pointer disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none disabled:active:scale-100"
+              className="px-3 py-1.5 bg-[#FCF0DA]/60 dark:bg-[#2C2623] hover:bg-[#FCF0DA] dark:hover:bg-[#4C4541] text-[#4C4541] dark:text-[#FCF0DA] rounded-lg text-xs font-semibold inline-flex items-center space-x-1.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-95 border border-[#AEAC78]/50 shadow-xs cursor-pointer disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none disabled:active:scale-100"
             >
-              <Archive className="w-3.5 h-3.5 text-secondary" />
+              <Archive className="w-3.5 h-3.5 text-[#AEAC78] dark:text-[#F2C46A]" />
               <span>Import LMS ZIP</span>
             </button>
 
             <button
               onClick={handleDetectAi}
               disabled={!selectedSubmissionId || detectingAi}
-              className="px-3 py-1.5 bg-surface-container hover:bg-surface-container-high text-on-surface dark:text-[#f9f9ff] rounded-lg text-xs font-semibold inline-flex items-center space-x-1.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-95 border border-surface-container-high/50 shadow-xs cursor-pointer disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none disabled:active:scale-100"
+              className="px-3 py-1.5 bg-[#FCF0DA]/60 dark:bg-[#2C2623] hover:bg-[#FCF0DA] dark:hover:bg-[#4C4541] text-[#4C4541] dark:text-[#FCF0DA] rounded-lg text-xs font-semibold inline-flex items-center space-x-1.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-95 border border-[#AEAC78]/50 shadow-xs cursor-pointer disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none disabled:active:scale-100"
               title="Run experimental code-style analysis; the result cannot prove authorship"
             >
-              <Bot className={cn("w-3.5 h-3.5 text-secondary", detectingAi && "animate-spin")} />
+              <Bot className={cn("w-3.5 h-3.5 text-[#AEAC78] dark:text-[#F2C46A]", detectingAi && "animate-spin")} />
               <span>{detectingAi ? 'Analyzing...' : 'AI Style Signal'}</span>
             </button>
 
             <button
               onClick={handleExportCsv}
               disabled={!selectedAssignmentId}
-              className="px-3 py-1.5 bg-primary-container hover:brightness-105 text-on-primary-container rounded-lg text-xs font-bold inline-flex items-center space-x-1.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-95 shadow-xs cursor-pointer disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none disabled:active:scale-100"
+              className="px-3 py-1.5 bg-[#F2C46A] hover:bg-[#e5b65b] text-[#4C4541] border border-[#AEAC78]/60 rounded-lg text-xs font-bold inline-flex items-center space-x-1.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-95 shadow-xs cursor-pointer disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none disabled:active:scale-100"
             >
-              <Download className="w-3.5 h-3.5 text-on-primary-container" />
+              <Download className="w-3.5 h-3.5 text-[#4C4541]" />
               <span>Export Gradebook CSV</span>
             </button>
           </div>
@@ -731,20 +731,20 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
 
         {/* Tab Navigation */}
         {actionError && <p role="alert" className="mt-2 text-sm text-rose-700 dark:text-rose-400">{actionError}</p>}
-        <div aria-label="Workspace sections" className="flex flex-wrap gap-4 mt-3 border-t border-surface-container-high/60 pt-3 text-sm">
+        <div aria-label="Workspace sections" className="flex flex-wrap gap-4 mt-3 border-t border-[#AEAC78]/30 pt-3 text-sm">
           <button
             onClick={() => handleTabChange('setup')}
             className={cn(
               "pb-1 font-bold tracking-tight transition-all duration-200 border-b-2 flex items-center space-x-1.5 cursor-pointer hover:-translate-y-0.5",
               activeTab === 'setup'
-                ? "border-primary text-primary dark:text-[#f9f9ff]"
-                : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/40"
+                ? "border-[#F2C46A] text-[#4C4541] dark:text-[#FCF0DA]"
+                : "border-transparent text-[#6B625B] dark:text-[#AEAC78] hover:text-[#4C4541] dark:hover:text-[#FCF0DA] hover:border-[#AEAC78]/50"
             )}
           >
-            <Plus className="w-4 h-4 text-primary" />
+            <Plus className="w-4 h-4 text-[#AEAC78] dark:text-[#F2C46A]" />
             <span>Set Up Course & Class</span>
             {activeTab === 'setup' && (
-              <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-primary-container inline-block animate-pulse ml-0.5" />
+              <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-[#F2C46A] inline-block animate-pulse ml-0.5" />
             )}
           </button>
 
@@ -754,14 +754,14 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
             className={cn(
               "pb-1 font-bold tracking-tight transition-all duration-200 border-b-2 flex items-center space-x-1.5 cursor-pointer disabled:opacity-40 hover:-translate-y-0.5 disabled:hover:translate-y-0",
               activeTab === 'rubric'
-                ? "border-primary text-primary dark:text-[#f9f9ff]"
-                : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/40"
+                ? "border-[#F2C46A] text-[#4C4541] dark:text-[#FCF0DA]"
+                : "border-transparent text-[#6B625B] dark:text-[#AEAC78] hover:text-[#4C4541] dark:hover:text-[#FCF0DA] hover:border-[#AEAC78]/50"
             )}
           >
-            <Sliders className="w-4 h-4 text-primary" />
+            <Sliders className="w-4 h-4 text-[#AEAC78] dark:text-[#F2C46A]" />
             <span>Rubric & Formulas</span>
             {activeTab === 'rubric' && (
-              <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-primary-container inline-block animate-pulse ml-0.5" />
+              <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-[#F2C46A] inline-block animate-pulse ml-0.5" />
             )}
           </button>
 
@@ -771,14 +771,14 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
             className={cn(
               "pb-1 font-bold tracking-tight transition-all duration-200 border-b-2 flex items-center space-x-1.5 cursor-pointer disabled:opacity-40 hover:-translate-y-0.5 disabled:hover:translate-y-0",
               activeTab === 'assignment'
-                ? "border-primary text-primary dark:text-[#f9f9ff]"
-                : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/40"
+                ? "border-[#F2C46A] text-[#4C4541] dark:text-[#FCF0DA]"
+                : "border-transparent text-[#6B625B] dark:text-[#AEAC78] hover:text-[#4C4541] dark:hover:text-[#FCF0DA] hover:border-[#AEAC78]/50"
             )}
           >
-            <BookOpen className="w-4 h-4 text-primary" />
+            <BookOpen className="w-4 h-4 text-[#AEAC78] dark:text-[#F2C46A]" />
             <span>Assignment & Tests</span>
             {activeTab === 'assignment' && (
-              <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-primary-container inline-block animate-pulse ml-0.5" />
+              <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-[#F2C46A] inline-block animate-pulse ml-0.5" />
             )}
           </button>
 
@@ -788,14 +788,14 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
             className={cn(
               "pb-1 font-bold tracking-tight transition-all duration-200 border-b-2 flex items-center space-x-1.5 cursor-pointer disabled:opacity-40 hover:-translate-y-0.5 disabled:hover:translate-y-0",
               activeTab === 'similarity'
-                ? "border-primary text-primary dark:text-[#f9f9ff]"
-                : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/40"
+                ? "border-[#F2C46A] text-[#4C4541] dark:text-[#FCF0DA]"
+                : "border-transparent text-[#6B625B] dark:text-[#AEAC78] hover:text-[#4C4541] dark:hover:text-[#FCF0DA] hover:border-[#AEAC78]/50"
             )}
           >
-            <ShieldAlert className="w-4 h-4 text-secondary" />
+            <ShieldAlert className="w-4 h-4 text-[#AEAC78] dark:text-[#F2C46A]" />
             <span>Similarity & Integrity</span>
             {activeTab === 'similarity' && (
-              <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-primary-container inline-block animate-pulse ml-0.5" />
+              <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-[#F2C46A] inline-block animate-pulse ml-0.5" />
             )}
           </button>
 
@@ -804,14 +804,14 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
             className={cn(
               "pb-1 font-bold tracking-tight transition-all duration-200 border-b-2 flex items-center space-x-1.5 cursor-pointer hover:-translate-y-0.5",
               activeTab === 'grading'
-                ? "border-primary text-primary dark:text-[#f9f9ff]"
-                : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant/40"
+                ? "border-[#F2C46A] text-[#4C4541] dark:text-[#FCF0DA]"
+                : "border-transparent text-[#6B625B] dark:text-[#AEAC78] hover:text-[#4C4541] dark:hover:text-[#FCF0DA] hover:border-[#AEAC78]/50"
             )}
           >
-            <FileSearch className="w-4 h-4 text-primary" />
+            <FileSearch className="w-4 h-4 text-[#AEAC78] dark:text-[#F2C46A]" />
             <span>Grading Queue & Evidence Inspector</span>
             {activeTab === 'grading' && (
-              <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-primary-container inline-block animate-pulse ml-0.5" />
+              <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-[#F2C46A] inline-block animate-pulse ml-0.5" />
             )}
           </button>
         </div>
@@ -854,19 +854,19 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
           }
 
           return (
-            <section aria-label="Assignment progress" className="mb-4 rounded-xl border border-surface-container-high/60 bg-surface-container-lowest dark:bg-[#1e1e24] p-4 shadow-xs">
+            <section aria-label="Assignment progress" className="mb-4 rounded-xl border border-[#AEAC78]/40 dark:border-[#AEAC78]/30 bg-[#FFFDF9] dark:bg-[#38322E] p-4 shadow-xs">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center space-x-2">
                     <span className="relative flex h-2.5 w-2.5 shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-container opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary-container" />
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#F2C46A] opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#F2C46A]" />
                     </span>
-                    <h2 className="text-lg font-bold text-on-surface dark:text-[#f9f9ff] text-balance truncate">
+                    <h2 className="text-lg font-bold text-[#4C4541] dark:text-[#FCF0DA] text-balance truncate">
                       {selectedAssignment.title}
                     </h2>
                   </div>
-                  <p className="mt-1 text-xs text-on-surface-variant text-pretty">
+                  <p className="mt-1 text-xs text-[#6B625B] dark:text-[#D8CEBA] text-pretty">
                     Review test evidence, adjust scores if needed, then confirm each grade before exporting.
                   </p>
 
@@ -1090,15 +1090,15 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
           <ErrorBoundary fallbackTitle="Error loading grading workspace">
             <div className="flex-1 grid grid-cols-1 xl:grid-cols-12 gap-4 min-w-0">
               {/* Left Submissions Roster Master List */}
-              <div className="xl:col-span-4 bg-surface-container-lowest dark:bg-[#1e1e24] rounded-xl border border-surface-container-high/60 shadow-xs flex flex-col min-w-0 overflow-hidden">
-                <div className="p-3 border-b border-surface-container-high/40 bg-surface-container-low dark:bg-[#263143]/40 shrink-0">
+              <div className="xl:col-span-4 bg-[#FFFDF9] dark:bg-[#38322E] rounded-xl border border-[#AEAC78]/40 dark:border-[#AEAC78]/30 shadow-xs flex flex-col min-w-0 overflow-hidden">
+                <div className="p-3 border-b border-[#AEAC78]/30 dark:border-[#AEAC78]/20 bg-[#FCF0DA]/40 dark:bg-[#2C2623]/60 shrink-0">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-on-surface dark:text-[#f9f9ff] text-xs uppercase tracking-wider">
+                    <span className="font-bold text-[#4C4541] dark:text-[#FCF0DA] text-xs uppercase tracking-wider">
                       Cohort Submissions ({submissions.length})
                     </span>
                     <button
                       onClick={loadAssignmentData}
-                      className="text-secondary hover:text-on-surface dark:hover:text-[#f9f9ff] p-1 cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95 disabled:hover:scale-100"
+                      className="text-[#AEAC78] hover:text-[#4C4541] dark:hover:text-[#F2C46A] p-1 cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95 disabled:hover:scale-100"
                       title="Reload submissions"
                       aria-label="Reload submissions"
                       disabled={loadingList || !selectedAssignmentId}
@@ -1108,21 +1108,21 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                   </div>
 
                   <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-outline absolute left-2.5 top-2.5" />
+                    <Search className="w-3.5 h-3.5 text-[#AEAC78] absolute left-2.5 top-2.5" />
                     <input
                       aria-label="Search submissions"
                       type="text"
                       placeholder="Search student ID, name..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-8 pr-3 py-1.5 bg-surface-container-lowest dark:bg-[#263143] border border-outline-variant/60 rounded-lg text-xs placeholder-on-surface-variant/60 text-on-surface dark:text-[#f9f9ff] focus:outline-none focus:ring-2 focus:ring-primary-container transition-all duration-200"
+                      className="w-full pl-8 pr-3 py-1.5 bg-[#FFFDF9] dark:bg-[#2C2623] border border-[#AEAC78]/60 rounded-lg text-xs placeholder-[#8F8782] text-[#4C4541] dark:text-[#FCF0DA] focus:outline-none focus:ring-2 focus:ring-[#F2C46A] transition-all duration-200"
                     />
                   </div>
-                  <label className="mt-3 block text-xs font-medium text-on-surface-variant">
+                  <label className="mt-3 block text-xs font-medium text-[#6B625B] dark:text-[#D8CEBA]">
                     Grade status
                     <select
                       aria-label="Filter by grade status"
-                      className="mt-1 w-full rounded-lg border border-outline-variant/60 bg-surface-container-lowest dark:bg-[#263143] p-2 text-xs text-on-surface dark:text-[#f9f9ff] focus:outline-none focus:ring-2 focus:ring-primary-container transition-all duration-200"
+                      className="mt-1 w-full rounded-lg border border-[#AEAC78]/60 bg-[#FFFDF9] dark:bg-[#2C2623] p-2 text-xs text-[#4C4541] dark:text-[#FCF0DA] focus:outline-none focus:ring-2 focus:ring-[#F2C46A] transition-all duration-200"
                       value={gradeFilter}
                       onChange={(e) => setGradeFilter(e.target.value)}
                     >
@@ -1204,28 +1204,28 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                           className={cn(
                             'w-full text-left p-3 cursor-pointer text-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md',
                             isSelected
-                              ? 'bg-primary-fixed/25 dark:bg-primary-fixed/10 border-l-4 border-primary-container ring-1 ring-primary-container/40 shadow-sm'
-                              : 'hover:bg-surface-container-low dark:hover:bg-[#263143]/40 border-l-4 border-transparent'
+                              ? 'bg-[#FCF0DA]/70 dark:bg-[#2C2623] border-l-4 border-[#F2C46A] ring-1 ring-[#F2C46A]/40 shadow-sm'
+                              : 'hover:bg-[#FCF0DA]/35 dark:hover:bg-[#2C2623]/60 border-l-4 border-transparent'
                           )}
                         >
                           <div className="flex items-start justify-between">
                             <div className="min-w-0 flex-1 mr-2">
                               <div className="flex items-center gap-1.5">
                                 {isSelected && (
-                                  <span className="w-1.5 h-1.5 rounded-full bg-primary-container shrink-0 animate-pulse" />
+                                  <span className="w-1.5 h-1.5 rounded-full bg-[#F2C46A] shrink-0 animate-pulse" />
                                 )}
-                                <div className="font-bold text-on-surface dark:text-[#f9f9ff] truncate">
+                                <div className="font-bold text-[#4C4541] dark:text-[#FCF0DA] truncate">
                                   {sub.student_name || sub.student_identifier || `Submission #${sub.id}`}
                                 </div>
                               </div>
-                              <div className="text-[11px] font-mono text-on-surface-variant mt-0.5 truncate">
+                              <div className="text-[11px] font-mono text-[#6B625B] dark:text-[#AEAC78] mt-0.5 truncate">
                                 ID: <code>{sub.student_identifier || 'N/A'}</code> - <code>{sub.original_filename}</code>
                               </div>
                             </div>
 
                             <div className="text-right">
                               {displayScore !== undefined && displayScore !== null ? (
-                                <span className="font-mono font-bold text-xs text-primary dark:text-primary-container">
+                                <span className="font-mono font-bold text-xs text-[#4C4541] dark:text-[#F2C46A]">
                                   {displayScore.toFixed(2)} pts
                                 </span>
                               ) : (

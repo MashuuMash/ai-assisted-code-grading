@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     jplag_jar_path: str | None = None
     similarity_default_threshold: float = 50.0
 
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ]
+    enable_demo_endpoints: bool = True
+
 
 @lru_cache
 def get_settings() -> Settings:

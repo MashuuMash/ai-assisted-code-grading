@@ -67,6 +67,25 @@ def recover_interrupted_jobs(db: Session | None = None) -> int:
     return _execute_with_db(db, _recover)
 
 
+def cleanup_orphan_sandbox_volumes() -> int:
+    """Remove dangling Docker volumes leftover from aborted grading runs."""
+    try:
+        import docker
+        client = docker.from_env()
+        volumes = client.volumes.list(filters={"label": "app=grading-sandbox"})
+        removed = 0
+        for vol in volumes:
+            try:
+                vol.remove(force=True)
+                removed += 1
+            except Exception:
+                pass
+        return removed
+    except Exception as exc:
+        logger.debug("Docker volume cleanup skipped: %s", exc)
+        return 0
+
+
 def process_job(
     job_id: int,
     runner: DockerSandboxRunner | None = None,
@@ -160,9 +179,12 @@ def process_job(
 def main() -> None:
     _ = get_settings()
     recovered = recover_interrupted_jobs()
+    orphans = cleanup_orphan_sandbox_volumes()
     logger.info("Grading worker started")
     if recovered:
         logger.warning("Marked %s interrupted grading jobs as failed", recovered)
+    if orphans:
+        logger.info("Removed %s dangling sandbox volumes", orphans)
 
     while True:
         job_id = claim_job()

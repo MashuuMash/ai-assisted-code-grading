@@ -426,7 +426,7 @@ class DetailedFeedbackPayload(BaseModel):
 
 
 class FeedbackGenerateRequest(BaseModel):
-    model_override: str | None = None
+    model_override: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9._-]+$")
 
 
 class FeedbackUpdate(BaseModel):

@@ -5,13 +5,14 @@ import uuid
 import zipfile
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import create_access_token, get_password_hash
+from app.config import get_settings
 from app.database import get_db
 from app.models import (
     Assignment,
@@ -46,7 +47,16 @@ from app.models import (
 )
 from app.submission_storage import SubmissionStorage
 
-router = APIRouter(prefix="/demo", tags=["demo"])
+
+def verify_demo_enabled() -> None:
+    if not get_settings().enable_demo_endpoints:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Demo endpoints are disabled in this environment",
+        )
+
+
+router = APIRouter(prefix="/demo", tags=["demo"], dependencies=[Depends(verify_demo_enabled)])
 
 DEMO_COURSE_CODE = "CS102-DEMO"
 DEMO_COHORT_CODE = "C01-DEMO"

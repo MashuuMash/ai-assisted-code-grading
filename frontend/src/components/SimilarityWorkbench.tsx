@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Check,
   Eye,
@@ -29,7 +29,7 @@ export const SimilarityWorkbench: React.FC<SimilarityWorkbenchProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
 
-  const fetchReports = async () => {
+  const fetchReports = useCallback(async () => {
     setLoading(true);
     try {
       const list = await api.similarity.listReports(courseId, classId, assignmentId);
@@ -46,11 +46,11 @@ export const SimilarityWorkbench: React.FC<SimilarityWorkbenchProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [courseId, classId, assignmentId]);
 
   useEffect(() => {
     fetchReports();
-  }, [courseId, classId, assignmentId]);
+  }, [fetchReports]);
 
   const handleRunSimilarity = async () => {
     setRunning(true);

@@ -283,14 +283,15 @@ test.describe('VeriPie Brand & Design System Verification', () => {
     }
   });
 
-  test('Tier 2: DemoWalkthroughBar displays Defense Walkthrough Mode and pulsing execution indicator', async ({ page }) => {
+  test('Tier 2: DemoWalkthroughBar displays interactive walkthrough stages and pulsing execution indicator', async ({ page }) => {
     await openWorkstation(page);
 
     const demoBar = page.locator('[data-testid="demo-walkthrough-bar"]').first();
     await expect(demoBar).toBeVisible();
 
-    // Verify defense mode text
-    await expect(demoBar).toContainText(/Defense Walkthrough Mode/i);
+    // Verify walkthrough stages are visible
+    await expect(demoBar).toContainText(/Setup & Ingest/i);
+    await expect(demoBar).toContainText(/Docker Sandbox Tests/i);
 
     // Verify pulsing execution dot exists
     const pulsingDot = demoBar.locator('.animate-ping, .animate-pulse, .animate-pulse-subtle').first();

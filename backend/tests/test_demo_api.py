@@ -376,3 +376,21 @@ def test_demo_seed_concurrency() -> None:
                 assert submission_count == 3, f"Unexpected submission count under concurrency: {submission_count}"
     finally:
         app.dependency_overrides.clear()
+
+
+def test_demo_endpoints_disabled_in_production(client: TestClient, monkeypatch) -> None:
+    """Verify demo endpoints return 403 Forbidden when enable_demo_endpoints is False."""
+    from app.config import get_settings
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "enable_demo_endpoints", False)
+
+    res_seed = client.post("/api/v1/demo/seed")
+    assert res_seed.status_code == 403
+    assert "disabled" in res_seed.json()["detail"].lower()
+
+    res_reset = client.post("/api/v1/demo/reset")
+    assert res_reset.status_code == 403
+
+    res_zip = client.get("/api/v1/demo/sample-zip")
+    assert res_zip.status_code == 403

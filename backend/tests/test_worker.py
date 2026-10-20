@@ -165,3 +165,19 @@ def test_process_job_timeout(db: Session) -> None:
     db.refresh(job)
     assert job.status == GradingJobStatus.TIMEOUT
     assert job.failure_type == "timeout"
+
+
+def test_cleanup_orphan_sandbox_volumes():
+    from app.worker import cleanup_orphan_sandbox_volumes
+
+    with patch("docker.from_env") as mock_docker:
+        mock_vol1 = MagicMock()
+        mock_vol2 = MagicMock()
+        mock_client = MagicMock()
+        mock_client.volumes.list.return_value = [mock_vol1, mock_vol2]
+        mock_docker.return_value = mock_client
+
+        removed = cleanup_orphan_sandbox_volumes()
+        assert removed == 2
+        mock_vol1.remove.assert_called_once_with(force=True)
+        mock_vol2.remove.assert_called_once_with(force=True)

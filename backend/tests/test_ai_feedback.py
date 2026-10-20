@@ -376,3 +376,25 @@ def test_batch_generate_feedback_api(
     assert batch_data["total_submissions"] == 2
     assert batch_data["generated_count"] == 2
     assert batch_data["failed_count"] == 0
+
+
+def test_feedback_model_override_validation():
+    """Verify malicious or invalid model_override values are rejected by schema validation."""
+    import pytest
+    from pydantic import ValidationError
+
+    from app.schemas import FeedbackGenerateRequest
+
+    # Valid model names
+    req = FeedbackGenerateRequest(model_override="gemini-2.5-flash")
+    assert req.model_override == "gemini-2.5-flash"
+
+    # Malicious or injection values should raise ValidationError
+    with pytest.raises(ValidationError):
+        FeedbackGenerateRequest(model_override="../../etc/passwd")
+
+    with pytest.raises(ValidationError):
+        FeedbackGenerateRequest(model_override="model?param=evil")
+
+    with pytest.raises(ValidationError):
+        FeedbackGenerateRequest(model_override="model name with spaces")

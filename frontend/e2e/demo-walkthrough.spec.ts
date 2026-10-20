@@ -92,7 +92,7 @@ test.describe('1-Click Interactive Demo & Walkthrough (R2)', () => {
     await page.getByRole('button', { name: /Launch Interactive Live Demo/i }).click();
 
     // Verify demo assignment CS102 / Prime and Fibonacci is active
-    const assignmentText = page.getByText(/CS102|Prime|Fibonacci|Algorithms/i).first();
+    const assignmentText = page.locator('main').getByText(/CS102|Prime|Fibonacci|Algorithms/i).first();
     await expect(assignmentText).toBeVisible({ timeout: 10_000 });
 
     // Verify student roster displays sample submissions
@@ -145,7 +145,7 @@ test.describe('1-Click Interactive Demo & Walkthrough (R2)', () => {
     await page.getByRole('button', { name: /Launch Interactive Live Demo/i }).click();
 
     // Verify split workstation panels are rendered
-    await expect(page.getByText(/CS102|Prime|Fibonacci/i).first()).toBeVisible();
+    await expect(page.locator('main').getByText(/CS102|Prime|Fibonacci/i).first()).toBeVisible();
 
     // Verify submissions list is populated
     const submissions = page.locator('[data-testid="submission-item"], button:has-text("1001"), button:has-text("1002"), button:has-text("1003")');
@@ -168,7 +168,7 @@ test.describe('1-Click Interactive Demo & Walkthrough (R2)', () => {
     const student1001 = page.getByRole('button').filter({ hasText: /1001/i }).first();
     if (await student1001.count() > 0) {
       await student1001.click();
-      await expect(page.getByText(/10|confirmed|passed/i).first()).toBeVisible();
+      await expect(page.locator('main').getByText(/10|confirmed|passed/i).first()).toBeVisible();
     }
 
     // 2. Inspect Student 1002 (Flawed with edge case bugs / warnings)

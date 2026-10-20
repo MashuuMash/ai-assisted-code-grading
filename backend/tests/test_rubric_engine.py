@@ -291,3 +291,16 @@ def test_rubric_api_and_gradebook_export(client, lecturer_token, lecturer_user, 
     assert refreshed["status"] == "draft"
     assert refreshed["final_total_score"] == 9.5
     assert client.put(f"{base}/grade", headers=headers, json=override_payload).status_code == 409
+
+
+def test_export_gradebook_csv_formula_injection_defense():
+    """Verify formula injection characters are neutralized with leading quote."""
+    from app.routes.rubrics import sanitize_csv_cell
+
+    assert sanitize_csv_cell("=1+1") == "'=1+1"
+    assert sanitize_csv_cell("@SUM(A1:A10)") == "'@SUM(A1:A10)"
+    assert sanitize_csv_cell("+cmd|' /C calc'!A0") == "'+cmd|' /C calc'!A0"
+    assert sanitize_csv_cell("-123") == "'-123"
+    assert sanitize_csv_cell("Alice Smith") == "Alice Smith"
+    assert sanitize_csv_cell("") == ""
+    assert sanitize_csv_cell(None) == ""

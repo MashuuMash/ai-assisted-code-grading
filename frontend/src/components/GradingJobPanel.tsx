@@ -69,18 +69,18 @@ export function GradingJobPanel({ base, submissionId, onFinished }: {
         </button>
       </div>
       {(busy || active) && (
-        <div className="mt-3 p-2.5 rounded-lg bg-surface-container-low dark:bg-[#263143]/60 border border-primary-container/40 space-y-2 animate-scale-pop">
-          <div className="flex items-center justify-between text-[11px] font-mono text-primary font-bold">
+        <div className="mt-3 p-2.5 rounded-lg bg-[#FCF0DA]/40 dark:bg-[#2C2623] border border-[#F2C46A]/50 space-y-2 animate-scale-pop">
+          <div className="flex items-center justify-between text-[11px] font-mono text-[#4C4541] dark:text-[#F2C46A] font-bold">
             <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
+              <span className="w-2 h-2 rounded-full bg-[#F2C46A] animate-ping" />
               Docker Container Executing in Isolated Sandbox...
             </span>
-            <span className="text-secondary font-semibold">cgroups: 256MB / 1 vCPU</span>
+            <span className="text-[#6B625B] dark:text-[#AEAC78] font-semibold">cgroups: 256MB / 1 vCPU</span>
           </div>
-          <div className="w-full bg-surface-container-high rounded-full h-1.5 overflow-hidden">
-            <div className="bg-primary-container h-1.5 rounded-full animate-scanline w-2/3" />
+          <div className="w-full bg-[#FCF0DA] dark:bg-[#38322E] rounded-full h-1.5 overflow-hidden border border-[#AEAC78]/30">
+            <div className="bg-[#F2C46A] h-1.5 rounded-full animate-scanline w-2/3" />
           </div>
-          <div className="flex items-center justify-between text-[10px] text-on-surface-variant font-mono">
+          <div className="flex items-center justify-between text-[10px] text-[#6B625B] dark:text-[#AEAC78] font-mono">
             <span>Stage 2/5: Pytest assertion suite running</span>
             <span>Network egress: disabled (--network none)</span>
           </div>

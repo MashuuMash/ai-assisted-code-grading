@@ -149,27 +149,20 @@ test.describe('Gate Challenger 2: Responsive Probing & Breakpoint Stress', () =>
         }
       }
 
-      // 4. Verify SVG visual illustrations maintain correct viewBox and aspect ratio
-      const illustrations = page.locator('[data-testid="pillar-illustration"] svg');
-      const illustrationCount = await illustrations.count();
-      expect(illustrationCount).toBe(4);
+      // 4. Verify compact pillar stat counters stay within viewport bounds
+      const pillarStats = page.locator('[data-testid="pillar-stat"]');
+      const statCount = await pillarStats.count();
+      expect(statCount).toBe(4);
 
-      for (let i = 0; i < illustrationCount; i++) {
-        const svg = illustrations.nth(i);
-        await expect(svg).toBeVisible();
-        const viewBox = await svg.getAttribute('viewBox');
-        expect(viewBox).toBe('0 0 540 240');
-
-        const box = await svg.boundingBox();
+      for (let i = 0; i < statCount; i++) {
+        const stat = pillarStats.nth(i);
+        await expect(stat).toBeVisible();
+        const box = await stat.boundingBox();
         expect(box).toBeTruthy();
         if (box) {
           expect(box.width).toBeGreaterThan(0);
           expect(box.height).toBeGreaterThan(0);
           expect(box.x + box.width).toBeLessThanOrEqual(vp.width + 2);
-          // Verify aspect ratio: 540/240 is 2.25. Floating point rendered ratio should be close to 2.25 (between 2.1 and 2.4)
-          const aspectRatio = box.width / box.height;
-          expect(aspectRatio).toBeGreaterThan(2.0);
-          expect(aspectRatio).toBeLessThan(2.5);
         }
       }
 

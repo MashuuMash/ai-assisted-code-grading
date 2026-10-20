@@ -319,6 +319,16 @@ def override_submission_grade(
     return grade
 
 
+def sanitize_csv_cell(value: str | None) -> str:
+    """Neutralize spreadsheet formula injection characters (=, +, -, @, \t, \r)."""
+    if not value:
+        return ""
+    val_str = str(value)
+    if val_str.startswith(("=", "+", "-", "@", "\t", "\r")):
+        return f"'{val_str}"
+    return val_str
+
+
 @router.get("/gradebook-csv")
 def export_gradebook_csv(
     course_id: int,
@@ -364,9 +374,9 @@ def export_gradebook_csv(
         grade = sub.grade
         row = [
             str(sub.id),
-            sub.student_identifier or "",
-            sub.student_name or "",
-            sub.original_filename,
+            sanitize_csv_cell(sub.student_identifier),
+            sanitize_csv_cell(sub.student_name),
+            sanitize_csv_cell(sub.original_filename),
         ]
 
         scores_by_crit = {}

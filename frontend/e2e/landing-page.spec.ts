@@ -70,7 +70,11 @@ test.describe('Showcase Landing Page (R1)', () => {
     await expect(launchDemoBtn).toBeVisible();
     await expect(launchDemoBtn).toBeEnabled();
 
-    // 2. Lecturer Quick Sign-In card for zero-regression workstation access
+    // 2. Lecturer Sign-In Modal trigger for zero-regression workstation access
+    const openLoginBtn = page.getByRole('button', { name: /Sign In to Workstation/i }).first();
+    await expect(openLoginBtn).toBeVisible();
+    await openLoginBtn.click();
+
     const usernameInput = page.getByPlaceholder('lecturer_username');
     await expect(usernameInput).toBeVisible();
     await expect(usernameInput).toBeEnabled();
@@ -79,7 +83,7 @@ test.describe('Showcase Landing Page (R1)', () => {
     await expect(passwordInput).toBeVisible();
     await expect(passwordInput).toBeEnabled();
 
-    const signInBtn = page.getByRole('button', { name: 'Sign In to Workstation' });
+    const signInBtn = page.getByTestId('login-modal').getByRole('button', { name: 'Sign In to Workstation' });
     await expect(signInBtn).toBeVisible();
     await expect(signInBtn).toBeEnabled();
   });
@@ -158,9 +162,9 @@ test.describe('Showcase Landing Page (R1)', () => {
     const launchDemoBtn = page.getByRole('button', { name: /Launch Interactive Live Demo/i });
     await expect(launchDemoBtn).toBeVisible();
 
-    // Verify sign in fields are accessible on mobile
-    const usernameInput = page.getByPlaceholder('lecturer_username');
-    await expect(usernameInput).toBeVisible();
+    // Verify sign in trigger is accessible on mobile
+    const signInTrigger = page.getByRole('button', { name: /Sign In to Workstation/i }).first();
+    await expect(signInTrigger).toBeVisible();
 
     // Verify strictly zero horizontal overflow: scrollWidth <= innerWidth
     const hasHorizontalOverflow = await page.evaluate(() => {
@@ -205,11 +209,12 @@ test.describe('Showcase Landing Page (R1)', () => {
   test('Tier 2: empty credential submission on landing page does not crash application', async ({ page }) => {
     await page.goto('/');
 
-    const signInBtn = page.getByRole('button', { name: 'Sign In to Workstation' });
+    await page.getByRole('button', { name: /Sign In to Workstation/i }).first().click();
+    const signInBtn = page.getByTestId('login-modal').getByRole('button', { name: 'Sign In to Workstation' });
     await signInBtn.click();
 
     // Page must remain stable and not crash to white screen
-    const heroHeadline = page.getByText(/Evidence First/i);
+    const heroHeadline = page.getByText(/Evidence First/i).first();
     await expect(heroHeadline).toBeVisible();
   });
 
@@ -220,6 +225,7 @@ test.describe('Showcase Landing Page (R1)', () => {
   test('Tier 3: dual-column hero maintains inputs usability and focus transitions', async ({ page }) => {
     await page.goto('/');
 
+    await page.getByRole('button', { name: /Sign In to Workstation/i }).first().click();
     const usernameInput = page.getByPlaceholder('lecturer_username');
     const passwordInput = page.getByPlaceholder('Enter password');
 
@@ -285,9 +291,11 @@ test.describe('Showcase Landing Page (R1)', () => {
     await expect(demoBtn).toBeVisible();
     await expect(demoBtn).toBeEnabled();
 
-    // 6. Evaluator tests lecturer sign-in card availability
+    // 6. Evaluator tests lecturer sign-in modal availability
+    await page.getByRole('button', { name: /Sign In to Workstation/i }).first().click();
     await expect(page.getByPlaceholder('lecturer_username')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Sign In to Workstation' })).toBeVisible();
+    await expect(page.getByTestId('login-modal').getByRole('button', { name: 'Sign In to Workstation' })).toBeVisible();
+    await page.keyboard.press('Escape');
 
     // 7. Verify zero horizontal overflow on full desktop viewport
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
@@ -333,22 +341,20 @@ test.describe('Showcase Landing Page (R1)', () => {
     expect(ctaColor).toMatch(/rgb\(255, 255, 255\)|rgb\(76, 69, 65\)/);
   });
 
-  test('Tier 5: all 4 pillar visual SVG cards and the interactive lifecycle SVG diagram are mounted and visible', async ({ page }) => {
+  test('Tier 5: all 4 compact pillar summary cards with animated stats and the interactive lifecycle SVG diagram are mounted and visible', async ({ page }) => {
     await page.goto('/');
 
-    // d) Rich visual SVG illustrations: all 4 pillar visual SVG cards
-    const pillarIllustrations = page.locator('[data-testid="pillar-illustration"]');
-    await expect(pillarIllustrations).toHaveCount(4);
+    // d) Compact pillar cards and animated stats
+    const pillarCards = page.locator('[data-testid="pillar-card"]');
+    await expect(pillarCards).toHaveCount(4);
+
+    const pillarStats = page.locator('[data-testid="pillar-stat"]');
+    await expect(pillarStats).toHaveCount(4);
 
     for (let i = 0; i < 4; i++) {
-      const illustration = pillarIllustrations.nth(i);
-      await expect(illustration).toBeVisible();
-      const svg = illustration.locator('svg').first();
-      await expect(svg).toBeVisible();
-      const box = await svg.boundingBox();
-      expect(box).not.toBeNull();
-      expect(box!.width).toBeGreaterThan(0);
-      expect(box!.height).toBeGreaterThan(0);
+      const card = pillarCards.nth(i);
+      await expect(card).toBeVisible();
+      await expect(pillarStats.nth(i)).toBeVisible();
     }
 
     // d) Rich visual SVG illustrations: interactive lifecycle SVG diagram

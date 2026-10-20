@@ -11,9 +11,10 @@ test('instructor creates workspace, edits tests, imports, grades, reruns and exp
   page.on('pageerror', (error) => serverErrors.push(error.message));
   page.on('dialog', (dialog) => void dialog.accept());
   await page.goto('/');
+  await page.getByRole('button', { name: /Sign In to Workstation/i }).first().click();
   await page.getByPlaceholder('lecturer_username').fill(username);
   await page.getByPlaceholder('Enter password').fill(password);
-  await page.getByRole('button', { name: 'Sign In to Workstation' }).click();
+  await page.getByTestId('login-modal').getByRole('button', { name: 'Sign In to Workstation' }).click();
   await page.getByRole('button', { name: 'Set Up Course & Class' }).click();
   await page.getByLabel('Course code', { exact: true }).fill(`E2E-${Date.now()}`);
   await page.getByLabel('Course name', { exact: true }).fill('Browser acceptance');

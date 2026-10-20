@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 280" fill="none">
+  <!-- Soft warm backdrop arch and ambient circles -->
+  <rect x="20" y="18" width="320" height="244" rx="24" fill="#FCF0DA" fill-opacity="0.55" />
+  <circle cx="180" cy="145" r="96" fill="#F2C46A" fill-opacity="0.22" />
+  <circle cx="92" cy="74" r="22" fill="#AEAC78" fill-opacity="0.2" />
+  <circle cx="282" cy="86" r="16" fill="#F2C46A" fill-opacity="0.35" />
+
+  <!-- Floating Python Code & AST Verification Card (Top Left) -->
+  <g transform="translate(34, 36)">
+    <rect x="0" y="0" width="112" height="64" rx="10" fill="#FFFDF9" stroke="#4C4541" stroke-width="2" />
+    <rect x="0" y="0" width="112" height="16" rx="10" fill="#4C4541" />
+    <rect x="0" y="10" width="112" height="6" fill="#4C4541" />
+    <circle cx="10" cy="8" r="2.5" fill="#F2C46A" />
+    <circle cx="18" cy="8" r="2.5" fill="#AEAC78" />
+    <circle cx="26" cy="8" r="2.5" fill="#FCF0DA" />
+    <!-- Code lines -->
+    <rect x="10" y="24" width="34" height="5" rx="2.5" fill="#F2C46A" />
+    <rect x="48" y="24" width="42" height="5" rx="2.5" fill="#4C4541" fill-opacity="0.7" />
+    <rect x="18" y="35" width="56" height="5" rx="2.5" fill="#AEAC78" />
+    <rect x="18" y="46" width="40" height="5" rx="2.5" fill="#4C4541" fill-opacity="0.45" />
+    <!-- Verified badge on card -->
+    <circle cx="94" cy="44" r="10" fill="#AEAC78" fill-opacity="0.3" stroke="#4C4541" stroke-width="1.5" />
+    <path d="M90 44L93 47L99 41" stroke="#4C4541" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+
+  <!-- Floating Deterministic Score Badge (Top Right) -->
+  <g transform="translate(232, 42)">
+    <rect x="0" y="0" width="94" height="54" rx="10" fill="#FFFDF9" stroke="#4C4541" stroke-width="2" />
+    <rect x="10" y="10" width="44" height="6" rx="3" fill="#AEAC78" />
+    <text x="10" y="38" fill="#4C4541" font-family="monospace" font-weight="800" font-size="16">10.0/10</text>
+    <circle cx="76" cy="27" r="10" fill="#F2C46A" stroke="#4C4541" stroke-width="1.5" />
+    <path d="M72 27L75 30L81 24" stroke="#4C4541" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+
+  <!-- Flat Character Illustration: Lecturer / Code Reviewer at Desk -->
+  <g transform="translate(0, 6)">
+    <!-- Back of chair -->
+    <rect x="136" y="136" width="88" height="84" rx="18" fill="#AEAC78" stroke="#4C4541" stroke-width="2.5" />
+
+    <!-- Character Torso / Academic Jacket -->
+    <path d="M122 222C122 184 146 164 180 164C214 164 238 184 238 222H122Z" fill="#4C4541" stroke="#4C4541" stroke-width="2.5" />
+    <!-- Inner Warm Sweater / Collar -->
+    <path d="M160 164L180 198L200 164H160Z" fill="#FCF0DA" stroke="#4C4541" stroke-width="2" stroke-linejoin="round" />
+    <!-- Tie / Accent Lapel -->
+    <path d="M176 174H184L186 206L180 214L174 206L176 174Z" fill="#F2C46A" stroke="#4C4541" stroke-width="1.8" stroke-linejoin="round" />
+
+    <!-- Neck -->
+    <rect x="171" y="144" width="18" height="24" rx="8" fill="#F5CBA7" stroke="#4C4541" stroke-width="2.2" />
+    <path d="M171 154C176 158 184 158 189 154" stroke="#4C4541" stroke-width="1.8" opacity="0.4" />
+
+    <!-- Head & Ears -->
+    <circle cx="152" cy="120" r="7" fill="#F5CBA7" stroke="#4C4541" stroke-width="2.2" />
+    <circle cx="208" cy="120" r="7" fill="#F5CBA7" stroke="#4C4541" stroke-width="2.2" />
+    <rect x="154" y="88" width="52" height="62" rx="26" fill="#F5CBA7" stroke="#4C4541" stroke-width="2.5" />
+
+    <!-- Hair (Flat Stylized Academic Wave) -->
+    <path d="M150 112C150 86 166 76 184 76C202 76 212 88 212 108C206 100 196 96 182 96C168 96 158 102 150 112Z" fill="#38322E" stroke="#4C4541" stroke-width="2.2" stroke-linejoin="round" />
+    <path d="M162 84C172 78 192 78 202 86" stroke="#F2C46A" stroke-width="2" stroke-linecap="round" opacity="0.7" />
+
+    <!-- Glasses (Round Academic Frames) -->
+    <circle cx="170" cy="118" r="9" fill="#FFFDF9" fill-opacity="0.7" stroke="#4C4541" stroke-width="2.2" />
+    <circle cx="192" cy="118" r="9" fill="#FFFDF9" fill-opacity="0.7" stroke="#4C4541" stroke-width="2.2" />
+    <path d="M179 118H183" stroke="#4C4541" stroke-width="2.2" stroke-linecap="round" />
+    <path d="M155 117L161 118" stroke="#4C4541" stroke-width="2" stroke-linecap="round" />
+    <path d="M201 118L206 117" stroke="#4C4541" stroke-width="2" stroke-linecap="round" />
+
+    <!-- Eyes & Eyebrows -->
+    <circle cx="170" cy="118" r="2.2" fill="#4C4541" />
+    <circle cx="192" cy="118" r="2.2" fill="#4C4541" />
+    <path d="M164 106C167 104 172 104 175 106" stroke="#4C4541" stroke-width="2" stroke-linecap="round" />
+    <path d="M187 106C190 104 195 104 198 106" stroke="#4C4541" stroke-width="2" stroke-linecap="round" />
+
+    <!-- Friendly Confident Smile -->
+    <path d="M174 134C177 138 185 138 188 134" stroke="#4C4541" stroke-width="2.2" stroke-linecap="round" />
+
+    <!-- Laptop on Desk in Front of Lecturer -->
+    <rect x="134" y="182" width="92" height="52" rx="8" fill="#FFFDF9" stroke="#4C4541" stroke-width="2.5" />
+    <rect x="138" y="186" width="84" height="44" rx="5" fill="#FCF0DA" />
+    <!-- VeriPie Emblem on Laptop Lid -->
+    <circle cx="180" cy="208" r="11" fill="#F2C46A" stroke="#4C4541" stroke-width="2" />
+    <path d="M180 197V208L188 202" stroke="#4C4541" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Desk Surface Line & Coffee Mug -->
+    <rect x="56" y="232" width="248" height="10" rx="5" fill="#F2C46A" stroke="#4C4541" stroke-width="2.2" />
+    <!-- Warm Espresso Cup on Left of Desk -->
+    <rect x="82" y="206" width="24" height="26" rx="4" fill="#FFFDF9" stroke="#4C4541" stroke-width="2.2" />
+    <rect x="82" y="212" width="24" height="8" fill="#AEAC78" />
+    <path d="M106 212H111C114 212 116 214 116 217C116 220 114 222 111 222H106" stroke="#4C4541" stroke-width="2.2" stroke-linecap="round" />
+    <!-- Steam waves -->
+    <path d="M90 198C90 194 93 194 93 190" stroke="#4C4541" stroke-width="1.8" stroke-linecap="round" opacity="0.6" />
+    <path d="M98 200C98 196 101 196 101 192" stroke="#4C4541" stroke-width="1.8" stroke-linecap="round" opacity="0.6" />
+
+    <!-- Stack of Graded Books on Right of Desk -->
+    <rect x="244" y="220" width="42" height="12" rx="3" fill="#AEAC78" stroke="#4C4541" stroke-width="2" />
+    <rect x="248" y="208" width="36" height="12" rx="3" fill="#FFFDF9" stroke="#4C4541" stroke-width="2" />
+  </g>
+</svg>
