@@ -18,8 +18,48 @@ import {
   TestCase,
   GradingJob,
 } from '../types';
+import {
+  demoAssignment,
+  demoClass,
+  demoCourse,
+  demoRubric,
+  demoSimilarityReport,
+  demoSubmissions,
+  demoUser,
+  getDemoSubmissionCode,
+  getDemoSubmissionEvidence,
+  getDemoSubmissionGrade,
+  getDemoGradingJobs,
+} from '../data/demoFixtures';
 
-const API_BASE = '/api/v1';
+export const API_BASE_URL = '/api/v1';
+const API_BASE = API_BASE_URL;
+
+export interface DemoUserResponse {
+  id: number | string;
+  username: string;
+  email: string;
+  full_name: string;
+  role: string;
+}
+
+export interface DemoSampleSubmission {
+  id: number | string;
+  student_name: string;
+  student_code: string;
+  grade_status: string;
+  final_score: number;
+}
+
+export interface DemoSeedResponse {
+  access_token: string;
+  token_type: string;
+  user: DemoUserResponse;
+  course_id: number | string;
+  class_id: number | string;
+  assignment_id: number | string;
+  sample_submissions: DemoSampleSubmission[];
+}
 
 export class ApiError extends Error {
   status: number;
@@ -35,6 +75,10 @@ export class ApiError extends Error {
 
 function getToken(): string | null {
   return localStorage.getItem('token');
+}
+
+export function isDemoModeActive(): boolean {
+  return typeof window !== 'undefined' && localStorage.getItem('is_demo_mode') === 'true';
 }
 
 export function setToken(token: string | null): void {
@@ -95,7 +139,12 @@ export const api = {
       return data;
     },
     getMe: async (): Promise<User> => {
-      return request<User>('/auth/me');
+      try {
+        return await request<User>('/auth/me');
+      } catch (err) {
+        if (isDemoModeActive()) return demoUser;
+        throw err;
+      }
     },
     logout: () => {
       setToken(null);
@@ -103,7 +152,17 @@ export const api = {
   },
 
   courses: {
-    list: (): Promise<Course[]> => request<Course[]>('/courses'),
+    list: async (): Promise<Course[]> => {
+      try {
+        const list = await request<Course[]>('/courses');
+        if (list && list.length > 0) return list;
+        if (isDemoModeActive()) return [demoCourse];
+        return list;
+      } catch (err) {
+        if (isDemoModeActive()) return [demoCourse];
+        throw err;
+      }
+    },
     create: (data: { code: string; name: string; description?: string }): Promise<Course> =>
       request<Course>('/courses', {
         method: 'POST',
@@ -112,8 +171,17 @@ export const api = {
   },
 
   classes: {
-    list: (courseId: number): Promise<ClassCohort[]> =>
-      request<ClassCohort[]>(`/courses/${courseId}/classes`),
+    list: async (courseId: number): Promise<ClassCohort[]> => {
+      try {
+        const list = await request<ClassCohort[]>(`/courses/${courseId}/classes`);
+        if (list && list.length > 0) return list;
+        if (isDemoModeActive()) return [demoClass];
+        return list;
+      } catch (err) {
+        if (isDemoModeActive()) return [demoClass];
+        throw err;
+      }
+    },
     create: (
       courseId: number,
       data: { code: string; name: string; semester: string; year: number; description?: string }
@@ -125,8 +193,17 @@ export const api = {
   },
 
   assignments: {
-    list: (courseId: number, classId: number): Promise<Assignment[]> =>
-      request<Assignment[]>(`/courses/${courseId}/classes/${classId}/assignments`),
+    list: async (courseId: number, classId: number): Promise<Assignment[]> => {
+      try {
+        const list = await request<Assignment[]>(`/courses/${courseId}/classes/${classId}/assignments`);
+        if (list && list.length > 0) return list;
+        if (isDemoModeActive()) return [demoAssignment];
+        return list;
+      } catch (err) {
+        if (isDemoModeActive()) return [demoAssignment];
+        throw err;
+      }
+    },
     create: (
       courseId: number,
       classId: number,
@@ -136,8 +213,14 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    get: (courseId: number, classId: number, assignmentId: number): Promise<Assignment> =>
-      request<Assignment>(`/courses/${courseId}/classes/${classId}/assignments/${assignmentId}`),
+    get: async (courseId: number, classId: number, assignmentId: number): Promise<Assignment> => {
+      try {
+        return await request<Assignment>(`/courses/${courseId}/classes/${classId}/assignments/${assignmentId}`);
+      } catch (err) {
+        if (isDemoModeActive()) return demoAssignment;
+        throw err;
+      }
+    },
     update: (courseId: number, classId: number, assignmentId: number, data: Partial<Assignment>): Promise<Assignment> =>
       request<Assignment>(`/courses/${courseId}/classes/${classId}/assignments/${assignmentId}`, {
         method: 'PUT', body: JSON.stringify(data),
@@ -153,9 +236,36 @@ export const api = {
     remove: (base: string, id: number) => request<void>(`${base}/test-cases/${id}`, { method: 'DELETE' }),
   },
   jobs: {
-    list: (base: string, submissionId: number) => request<GradingJob[]>(`${base}/submissions/${submissionId}/jobs`),
-    get: (base: string, submissionId: number, id: number) => request<GradingJob>(`${base}/submissions/${submissionId}/jobs/${id}`),
-    queue: (base: string, submissionId: number) => request<GradingJob>(`${base}/submissions/${submissionId}/grade`, { method: 'POST' }),
+    list: async (base: string, submissionId: number) => {
+      try {
+        return await request<GradingJob[]>(`${base}/submissions/${submissionId}/jobs`);
+      } catch (err) {
+        if (isDemoModeActive()) return getDemoGradingJobs(submissionId);
+        throw err;
+      }
+    },
+    get: async (base: string, submissionId: number, id: number) => {
+      try {
+        return await request<GradingJob>(`${base}/submissions/${submissionId}/jobs/${id}`);
+      } catch (err) {
+        if (isDemoModeActive()) {
+          const jobs = getDemoGradingJobs(submissionId);
+          return jobs.find((j) => j.id === id) || jobs[0];
+        }
+        throw err;
+      }
+    },
+    queue: async (base: string, submissionId: number) => {
+      try {
+        return await request<GradingJob>(`${base}/submissions/${submissionId}/grade`, { method: 'POST' });
+      } catch (err) {
+        if (isDemoModeActive()) {
+          const jobs = getDemoGradingJobs(submissionId);
+          return jobs[0];
+        }
+        throw err;
+      }
+    },
   },
 
   batch: {
@@ -178,44 +288,83 @@ export const api = {
   },
 
   submissions: {
-    list: (courseId: number, classId: number, assignmentId: number): Promise<Submission[]> =>
-      request<Submission[]>(`/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/submissions`),
-    get: (courseId: number, classId: number, assignmentId: number, submissionId: number): Promise<Submission> =>
-      request<Submission>(`/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/submissions/${submissionId}`),
+    list: async (courseId: number, classId: number, assignmentId: number): Promise<Submission[]> => {
+      try {
+        const list = await request<Submission[]>(`/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/submissions`);
+        if (list && list.length > 0) return list;
+        if (isDemoModeActive()) return demoSubmissions;
+        return list;
+      } catch (err) {
+        if (isDemoModeActive()) return demoSubmissions;
+        throw err;
+      }
+    },
+    get: async (courseId: number, classId: number, assignmentId: number, submissionId: number): Promise<Submission> => {
+      try {
+        return await request<Submission>(`/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/submissions/${submissionId}`);
+      } catch (err) {
+        if (isDemoModeActive()) {
+          const found = demoSubmissions.find((s) => s.id === submissionId || String(s.id) === String(submissionId));
+          if (found) return found;
+        }
+        throw err;
+      }
+    },
     getSource: async (
       courseId: number,
       classId: number,
       assignmentId: number,
       submissionId: number
     ): Promise<string> => {
-      const token = getToken();
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+      try {
+        const token = getToken();
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(
-        `${API_BASE}/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/submissions/${submissionId}/source`,
-        { headers }
-      );
-      if (!res.ok) throw new ApiError(res.status, 'Failed to fetch source code');
-      return res.text();
+        const res = await fetch(
+          `${API_BASE}/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/submissions/${submissionId}/source`,
+          { headers }
+        );
+        if (!res.ok) throw new ApiError(res.status, 'Failed to fetch source code');
+        return await res.text();
+      } catch (err) {
+        if (isDemoModeActive()) {
+          return getDemoSubmissionCode(submissionId);
+        }
+        throw err;
+      }
     },
   },
 
   evidence: {
-    list: (
+    list: async (
       courseId: number,
       classId: number,
       assignmentId: number,
       submissionId: number
-    ): Promise<SubmissionEvidence[]> =>
-      request<SubmissionEvidence[]>(
-        `/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/submissions/${submissionId}/evidence`
-      ),
+    ): Promise<SubmissionEvidence[]> => {
+      try {
+        return await request<SubmissionEvidence[]>(
+          `/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/submissions/${submissionId}/evidence`
+        );
+      } catch (err) {
+        if (isDemoModeActive()) {
+          return getDemoSubmissionEvidence(submissionId);
+        }
+        throw err;
+      }
+    },
   },
 
   rubrics: {
-    get: (courseId: number, classId: number, assignmentId: number): Promise<Rubric> =>
-      request<Rubric>(`/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/rubric`),
+    get: async (courseId: number, classId: number, assignmentId: number): Promise<Rubric> => {
+      try {
+        return await request<Rubric>(`/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/rubric`);
+      } catch (err) {
+        if (isDemoModeActive()) return demoRubric;
+        throw err;
+      }
+    },
     create: (courseId: number, classId: number, assignmentId: number, data: any): Promise<Rubric> =>
       request<Rubric>(`/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/rubric`, {
         method: 'POST',
@@ -236,16 +385,24 @@ export const api = {
         `/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/submissions/${submissionId}/evaluate-grade`,
         { method: 'POST' }
       ),
-    getGrade: (
+    getGrade: async (
       courseId: number,
       classId: number,
       assignmentId: number,
       submissionId: number
-    ): Promise<SubmissionGrade> =>
-      request<SubmissionGrade>(
-        `/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/submissions/${submissionId}/grade`
-      ),
-    overrideGrade: (
+    ): Promise<SubmissionGrade> => {
+      try {
+        return await request<SubmissionGrade>(
+          `/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/submissions/${submissionId}/grade`
+        );
+      } catch (err) {
+        if (isDemoModeActive()) {
+          return getDemoSubmissionGrade(submissionId);
+        }
+        throw err;
+      }
+    },
+    overrideGrade: async (
       courseId: number,
       classId: number,
       assignmentId: number,
@@ -256,14 +413,28 @@ export const api = {
         feedback_summary?: string;
         criterion_overrides?: Array<{ criterion_id: number; final_score: number; justification?: string }>;
       }
-    ): Promise<SubmissionGrade> =>
-      request<SubmissionGrade>(
-        `/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/submissions/${submissionId}/grade`,
-        {
-          method: 'PUT',
-          body: JSON.stringify(data),
+    ): Promise<SubmissionGrade> => {
+      try {
+        return await request<SubmissionGrade>(
+          `/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/submissions/${submissionId}/grade`,
+          {
+            method: 'PUT',
+            body: JSON.stringify(data),
+          }
+        );
+      } catch (err) {
+        if (isDemoModeActive()) {
+          const base = getDemoSubmissionGrade(submissionId);
+          return {
+            ...base,
+            status: data.status || 'confirmed',
+            final_total_score: data.final_total_score !== undefined ? data.final_total_score : base.final_total_score,
+            feedback_summary: data.feedback_summary || base.feedback_summary,
+          };
         }
-      ),
+        throw err;
+      }
+    },
     downloadGradebookCsv: async (courseId: number, classId: number, assignmentId: number): Promise<void> => {
       const token = getToken();
       const response = await fetch(
@@ -297,19 +468,34 @@ export const api = {
           body: JSON.stringify({ threshold }),
         }
       ),
-    listReports: (courseId: number, classId: number, assignmentId: number): Promise<SimilarityReport[]> =>
-      request<SimilarityReport[]>(
-        `/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/similarity/reports`
-      ),
-    getReport: (
+    listReports: async (courseId: number, classId: number, assignmentId: number): Promise<SimilarityReport[]> => {
+      try {
+        const list = await request<SimilarityReport[]>(
+          `/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/similarity/reports`
+        );
+        if (list && list.length > 0) return list;
+        if (isDemoModeActive()) return [demoSimilarityReport];
+        return list;
+      } catch (err) {
+        if (isDemoModeActive()) return [demoSimilarityReport];
+        throw err;
+      }
+    },
+    getReport: async (
       courseId: number,
       classId: number,
       assignmentId: number,
       reportId: number
-    ): Promise<SimilarityReport> =>
-      request<SimilarityReport>(
-        `/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/similarity/reports/${reportId}`
-      ),
+    ): Promise<SimilarityReport> => {
+      try {
+        return await request<SimilarityReport>(
+          `/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/similarity/reports/${reportId}`
+        );
+      } catch (err) {
+        if (isDemoModeActive()) return demoSimilarityReport;
+        throw err;
+      }
+    },
     reviewComparison: (
       courseId: number,
       classId: number,
@@ -392,5 +578,13 @@ export const api = {
         `/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/submissions/batch-detect-ai`,
         { method: 'POST' }
       ),
+  },
+
+  demo: {
+    seed: (reset?: boolean) =>
+      request<DemoSeedResponse>(`/demo/seed${reset ? '?reset=true' : ''}`, { method: 'POST' }),
+    reset: () =>
+      request<{ status: string; message: string }>('/demo/reset', { method: 'POST' }),
+    sampleZip: () => `${API_BASE_URL}/demo/sample-zip`,
   },
 };

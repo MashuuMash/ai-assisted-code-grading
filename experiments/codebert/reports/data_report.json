@@ -1,0 +1,81 @@
+{
+  "dataset": "basakdemirok/AIGCodeSet",
+  "revision": "b4d4e69fdbcba2608c99808c6afbf53a3bfd108c",
+  "license_declared_by_publisher": "CDLA-Permissive-2.0",
+  "seed": 42,
+  "heldout_generator": "LLAMA",
+  "raw_sha256": {
+    "human_selected_dataset.csv": "f02f1099de41434e67f26dd0470e8cce32ac1a80966cea51c8f9a25b95991de8",
+    "created_dataset_with_llms.csv": "be858efdb3233dff32b4cf239171dd686f9fb968d26cb0ab44c668fa40b2226e",
+    "README.md": "366485d67d815f9a8ca8e6feaecca8fa615144615d595af38c6a8686c496470d"
+  },
+  "excluded": {
+    "ai_repair_or_hybrid": 1887
+  },
+  "audit": {
+    "conflicting_provenance_rows_removed": 38,
+    "same_label_duplicate_rows_removed": 18,
+    "heldout_rows_excluded_from_train_validation": 248,
+    "independent_groups": 317
+  },
+  "splits": {
+    "train": {
+      "rows": 3466,
+      "labels": {
+        "0": 3071,
+        "1": 395
+      },
+      "generators": {
+        "HUMAN": 3071,
+        "CODESTRAL": 197,
+        "GEMINI": 198
+      },
+      "problems": 206
+    },
+    "validation": {
+      "rows": 796,
+      "labels": {
+        "0": 704,
+        "1": 92
+      },
+      "generators": {
+        "HUMAN": 704,
+        "GEMINI": 47,
+        "CODESTRAL": 45
+      },
+      "problems": 47
+    },
+    "test_seen": {
+      "rows": 1068,
+      "labels": {
+        "0": 946,
+        "1": 122
+      },
+      "generators": {
+        "HUMAN": 946,
+        "GEMINI": 60,
+        "CODESTRAL": 62
+      },
+      "problems": 64
+    },
+    "test_unseen": {
+      "rows": 1008,
+      "labels": {
+        "0": 946,
+        "1": 62
+      },
+      "generators": {
+        "HUMAN": 946,
+        "LLAMA": 62
+      },
+      "problems": 64
+    }
+  },
+  "limitations": [
+    "test_seen and test_unseen reuse human test controls; do not pool them",
+    "No author-disjoint guarantee or pretrained-model contamination check",
+    "Token-normalized dedup is not full semantic near-duplicate detection",
+    "Dataset provenance labels are publisher assertions, not proof of authorship",
+    "AI repair/hybrid code excluded; no claim on mixed human/AI code"
+  ]
+}

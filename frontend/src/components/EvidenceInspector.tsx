@@ -39,16 +39,16 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({ evidence, 
       : evidence.filter((e) => e.category === selectedCategory || e.source === selectedCategory);
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col h-full overflow-hidden">
+    <div className="bg-[#FFFDF9] dark:bg-[#38322E] rounded-xl border border-[#AEAC78]/40 dark:border-[#AEAC78]/30 shadow-xs flex flex-col h-full overflow-hidden text-[#4C4541] dark:text-[#FCF0DA]">
       {/* Header with category tabs */}
-      <div className="p-3.5 border-b border-slate-100 bg-slate-50/70">
+      <div className="p-3.5 border-b border-[#AEAC78]/30 dark:border-[#AEAC78]/20 bg-[#FCF0DA]/40 dark:bg-[#2C2623]/60">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center space-x-2">
-            <FileSearch className="w-4 h-4 text-indigo-600" />
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+            <FileSearch className="w-4 h-4 text-[#AEAC78] dark:text-[#F2C46A]" />
+            <h3 className="text-xs font-bold text-[#4C4541] dark:text-[#FCF0DA] uppercase tracking-wider">
               Evidence Engine Records
             </h3>
-            <span className="text-[11px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-semibold font-mono">
+            <span className="text-[11px] bg-[#FCF0DA] dark:bg-[#2C2623] text-[#4C4541] dark:text-[#FCF0DA] border border-[#AEAC78]/40 px-2 py-0.5 rounded-full font-semibold font-mono">
               {evidence.length}
             </span>
           </div>
@@ -57,70 +57,70 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({ evidence, 
         <div className="flex flex-wrap gap-1 text-xs">
           <button
             onClick={() => setSelectedCategory('all')}
-            className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+            className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
               selectedCategory === 'all'
-                ? 'bg-slate-800 text-white shadow-sm'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                ? 'bg-[#4C4541] dark:bg-[#F2C46A] text-[#FCF0DA] dark:text-[#4C4541] shadow-xs'
+                : 'bg-[#FFFDF9] dark:bg-[#2C2623] text-[#4C4541] dark:text-[#FCF0DA] border border-[#AEAC78]/40 hover:bg-[#FCF0DA]/50'
             }`}
           >
             All ({evidence.length})
           </button>
           <button
             onClick={() => setSelectedCategory('pytest')}
-            className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center space-x-1 ${
+            className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center space-x-1 cursor-pointer ${
               selectedCategory === 'pytest'
-                ? 'bg-emerald-700 text-white shadow-sm'
-                : 'bg-white text-emerald-800 border border-emerald-200 hover:bg-emerald-50'
+                ? 'bg-[#2E4324] dark:bg-[#AEAC78] text-[#FCF0DA] dark:text-[#4C4541] shadow-xs'
+                : 'bg-[#FFFDF9] dark:bg-[#2C2623] text-[#4C4541] dark:text-[#FCF0DA] border border-[#AEAC78]/40 hover:bg-[#FCF0DA]/50'
             }`}
           >
-            <CheckCircle2 className="w-3.5 h-3.5" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-[#AEAC78]" />
             <span>Tests ({testEvidence.length})</span>
           </button>
           <button
             onClick={() => setSelectedCategory('ruff')}
-            className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center space-x-1 ${
+            className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center space-x-1 cursor-pointer ${
               selectedCategory === 'ruff'
-                ? 'bg-amber-600 text-white shadow-sm'
-                : 'bg-white text-amber-800 border border-amber-200 hover:bg-amber-50'
+                ? 'bg-[#6B4307] dark:bg-[#F2C46A] text-[#FCF0DA] dark:text-[#4C4541] shadow-xs'
+                : 'bg-[#FFFDF9] dark:bg-[#2C2623] text-[#4C4541] dark:text-[#FCF0DA] border border-[#AEAC78]/40 hover:bg-[#FCF0DA]/50'
             }`}
           >
-            <AlertTriangle className="w-3.5 h-3.5" />
+            <AlertTriangle className="w-3.5 h-3.5 text-[#F2C46A]" />
             <span>Ruff Linter ({ruffEvidence.length})</span>
           </button>
           <button
             onClick={() => setSelectedCategory('ast')}
-            className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center space-x-1 ${
+            className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center space-x-1 cursor-pointer ${
               selectedCategory === 'ast'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'bg-white text-blue-800 border border-blue-200 hover:bg-blue-50'
+                ? 'bg-[#4C4541] dark:bg-[#AEAC78] text-[#FCF0DA] dark:text-[#4C4541] shadow-xs'
+                : 'bg-[#FFFDF9] dark:bg-[#2C2623] text-[#4C4541] dark:text-[#FCF0DA] border border-[#AEAC78]/40 hover:bg-[#FCF0DA]/50'
             }`}
           >
-            <Cpu className="w-3.5 h-3.5" />
+            <Cpu className="w-3.5 h-3.5 text-[#AEAC78]" />
             <span>Complexity ({astEvidence.length})</span>
           </button>
           {jplagEvidence.length > 0 && (
             <button
               onClick={() => setSelectedCategory('jplag')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center space-x-1 ${
+              className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center space-x-1 cursor-pointer ${
                 selectedCategory === 'jplag'
-                  ? 'bg-rose-600 text-white shadow-sm'
-                  : 'bg-white text-rose-800 border border-rose-200 hover:bg-rose-50'
+                  ? 'bg-[#9E3A24] dark:bg-rose-400 text-[#FCF0DA] dark:text-[#4C4541] shadow-xs'
+                  : 'bg-[#FFFDF9] dark:bg-[#2C2623] text-[#4C4541] dark:text-[#FCF0DA] border border-[#AEAC78]/40 hover:bg-[#FCF0DA]/50'
               }`}
             >
-              <ShieldAlert className="w-3.5 h-3.5" />
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />
               <span>Similarity ({jplagEvidence.length})</span>
             </button>
           )}
           {codebertEvidence.length > 0 && (
             <button
               onClick={() => setSelectedCategory('codebert')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center space-x-1 ${
+              className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center space-x-1 cursor-pointer ${
                 selectedCategory === 'codebert'
-                  ? 'bg-purple-600 text-white shadow-sm'
-                  : 'bg-white text-purple-800 border border-purple-200 hover:bg-purple-50'
+                  ? 'bg-[#5C3D75] dark:bg-[#F2C46A] text-[#FCF0DA] dark:text-[#4C4541] shadow-xs'
+                : 'bg-[#FFFDF9] dark:bg-[#2C2623] text-[#4C4541] dark:text-[#FCF0DA] border border-[#AEAC78]/40 hover:bg-[#FCF0DA]/50'
               }`}
             >
-              <Bot className="w-3.5 h-3.5" />
+              <Bot className="w-3.5 h-3.5 text-[#AEAC78]" />
               <span>AI Style Signal ({codebertEvidence.length})</span>
             </button>
           )}
@@ -130,7 +130,7 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({ evidence, 
       {/* Evidence items list */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
         {filteredEvidence.length === 0 ? (
-          <div className="text-center py-8 text-slate-400 text-xs">
+          <div className="text-center py-8 text-[#4C4541]/70 dark:text-[#FCF0DA]/70 text-xs">
             No evidence records found for this category.
           </div>
         ) : (
@@ -144,80 +144,80 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({ evidence, 
                 key={item.id}
                 className={`rounded-lg border p-3 text-xs transition-all ${
                   isPassed
-                    ? 'border-emerald-200 bg-emerald-50/40'
+                    ? 'border-[#AEAC78] bg-[#AEAC78]/15 text-[#4C4541] dark:text-[#FCF0DA]'
                     : item.severity === 'error'
-                    ? 'border-rose-200 bg-rose-50/40'
+                    ? 'border-rose-400 dark:border-rose-700 bg-rose-500/10 text-[#4C4541] dark:text-[#FCF0DA]'
                     : item.severity === 'warning'
-                    ? 'border-amber-200 bg-amber-50/40'
-                    : 'border-slate-200 bg-slate-50/60'
+                    ? 'border-[#F2C46A] bg-[#F2C46A]/20 text-[#4C4541] dark:text-[#FCF0DA]'
+                    : 'border-[#AEAC78]/40 bg-[#FCF0DA]/30 dark:bg-[#2C2623]/40 text-[#4C4541] dark:text-[#FCF0DA]'
                 }`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start space-x-2 flex-1">
                     {isPassed ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                      <CheckCircle2 className="w-4 h-4 text-[#AEAC78] mt-0.5 shrink-0" />
                     ) : item.source === 'codebert' ? (
-                      <Bot className="w-4 h-4 text-purple-600 mt-0.5 shrink-0" />
+                      <Bot className="w-4 h-4 text-[#AEAC78] mt-0.5 shrink-0" />
                     ) : item.severity === 'error' ? (
-                      <XCircle className="w-4 h-4 text-rose-600 mt-0.5 shrink-0" />
+                      <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
                     ) : item.severity === 'warning' ? (
-                      <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                      <AlertTriangle className="w-4 h-4 text-[#F2C46A] mt-0.5 shrink-0" />
                     ) : (
-                      <Sparkles className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                      <Sparkles className="w-4 h-4 text-[#AEAC78] mt-0.5 shrink-0" />
                     )}
 
                     <div className="flex-1">
                       <div className="flex items-center space-x-2 flex-wrap">
-                        <span className="font-bold text-slate-800 font-mono">
+                        <span className="font-bold text-[#4C4541] dark:text-[#FCF0DA] font-mono">
                           {item.rule_code}
                         </span>
-                        <span className="text-[10px] uppercase font-semibold px-1.5 py-0.2 rounded bg-slate-200/80 text-slate-700">
+                        <span className="text-[10px] uppercase font-semibold px-1.5 py-0.2 rounded bg-[#FCF0DA] dark:bg-[#2C2623] text-[#4C4541] dark:text-[#FCF0DA] border border-[#AEAC78]/40">
                           {item.source}
                         </span>
-                        <span className="text-[10px] uppercase font-semibold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                        <span className="text-[10px] uppercase font-semibold px-1.5 py-0.2 rounded bg-[#FCF0DA] dark:bg-[#2C2623] text-[#4C4541] dark:text-[#FCF0DA] border border-[#AEAC78]/40">
                           {item.category}
                         </span>
                         {isHiddenTest && (
-                          <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-purple-100 text-purple-700 border border-purple-200 flex items-center space-x-0.5">
+                          <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-[#F2C46A]/20 text-[#6B4307] dark:text-[#F2C46A] border border-[#F2C46A]/40 flex items-center space-x-0.5">
                             <EyeOff className="w-3 h-3" />
                             <span>Hidden Test</span>
                           </span>
                         )}
                       </div>
 
-                      <p className="mt-1 text-slate-700 font-sans leading-relaxed">
+                      <p className="mt-1 text-[#4C4541] dark:text-[#FCF0DA] font-sans leading-relaxed">
                         {item.message}
                       </p>
 
                       {item.source === 'codebert' && item.metric_value != null && (
-                        <div className="mt-2 p-2 rounded bg-purple-50 border border-purple-200">
+                        <div className="mt-2 p-2 rounded bg-[#FCF0DA]/50 dark:bg-[#2C2623] border border-[#AEAC78]/40 text-[#4C4541] dark:text-[#FCF0DA]">
                           <div className="flex items-center justify-between text-[11px] mb-1">
-                            <span className="font-semibold text-purple-900">
+                            <span className="font-semibold text-[#4C4541] dark:text-[#FCF0DA]">
                               Experimental style score:
                             </span>
-                            <span className="font-mono font-bold text-purple-700">
+                            <span className="font-mono font-bold text-[#4C4541] dark:text-[#F2C46A]">
                               {Math.round(item.metric_value * 100)}%
                             </span>
                           </div>
-                          <div className="w-full bg-purple-200 h-1.5 rounded-full overflow-hidden">
+                          <div className="w-full bg-[#FCF0DA] dark:bg-[#38322E] h-1.5 rounded-full overflow-hidden border border-[#AEAC78]/30">
                             <div
-                              className="bg-purple-600 h-full rounded-full transition-all"
+                              className="bg-[#F2C46A] h-full rounded-full transition-all"
                               style={{ width: `${Math.round(item.metric_value * 100)}%` }}
                             />
                           </div>
-                          <p className="mt-1.5 text-[10px] text-purple-700 italic">
+                          <p className="mt-1.5 text-[10px] text-[#4C4541]/70 dark:text-[#FCF0DA]/70 italic">
                             Supporting research signal only. Manual instructor verification required.
                           </p>
                         </div>
                       )}
 
                       {item.location && (
-                        <div className="mt-1 text-[11px] font-mono text-slate-500 flex items-center space-x-1">
+                        <div className="mt-1 text-[11px] font-mono text-[#4C4541]/70 dark:text-[#FCF0DA]/70 flex items-center space-x-1">
                           <span>Location: {item.location}</span>
                           {onSelectLine && item.raw_data?.line_number && (
                             <button
                               onClick={() => onSelectLine(item.raw_data!.line_number)}
-                              className="text-indigo-600 hover:underline ml-1 font-sans"
+                              className="text-[#AEAC78] dark:text-[#F2C46A] hover:underline ml-1 font-sans font-semibold cursor-pointer"
                             >
                               Jump to line
                             </button>
@@ -230,7 +230,7 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({ evidence, 
                   {item.raw_data && (
                     <button
                       onClick={() => toggleExpand(item.id)}
-                      className="text-slate-400 hover:text-slate-700 p-1 ml-2"
+                      className="text-[#4C4541]/70 hover:text-[#4C4541] dark:text-[#FCF0DA]/70 dark:hover:text-[#FCF0DA] p-1 ml-2 cursor-pointer"
                       title="Toggle detailed trace"
                     >
                       {isExpanded ? (
@@ -244,7 +244,7 @@ export const EvidenceInspector: React.FC<EvidenceInspectorProps> = ({ evidence, 
 
                 {/* Expanded technical trace */}
                 {isExpanded && item.raw_data && (
-                  <div className="mt-2.5 pt-2 border-t border-slate-200/80 font-mono text-[11px] bg-slate-900 text-slate-200 p-2.5 rounded-lg overflow-x-auto">
+                  <div className="mt-2.5 pt-2 border-t border-[#AEAC78]/30 font-mono text-[11px] bg-[#2C2623] text-[#FCF0DA] p-2.5 rounded-lg border border-[#4C4541] overflow-x-auto">
                     <pre className="whitespace-pre-wrap">
                       {JSON.stringify(item.raw_data, null, 2)}
                     </pre>

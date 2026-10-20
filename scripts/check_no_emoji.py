@@ -22,6 +22,7 @@ EXCLUDED_DIRS = {
     "build",
     ".idea",
     ".vscode",
+    "stitch_veripie_ui_redesign",
 }
 
 # File extensions to scan

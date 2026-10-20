@@ -18,16 +18,16 @@ export const CodeViewer: React.FC<CodeViewerProps> = ({ code, filename, highligh
   };
 
   return (
-    <div className="bg-slate-950 text-slate-100 rounded-xl border border-slate-800 overflow-hidden shadow-md flex flex-col h-full">
-      <div className="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex items-center justify-between text-xs">
-        <div className="flex items-center space-x-2 text-slate-300 font-mono">
-          <FileCode className="w-4 h-4 text-indigo-400" />
+    <div className="bg-[#2C2623] text-[#FCF0DA] rounded-xl border border-[#AEAC78]/40 overflow-hidden shadow-sm flex flex-col h-full">
+      <div className="bg-[#38322E] px-4 py-2.5 border-b border-[#AEAC78]/30 flex items-center justify-between text-xs">
+        <div className="flex items-center space-x-2 text-[#FCF0DA] font-mono">
+          <FileCode className="w-4 h-4 text-[#F2C46A]" />
           <span className="font-semibold">{filename}</span>
-          <span className="text-slate-500">({lines.length} lines)</span>
+          <span className="text-[#AEAC78]">({lines.length} lines)</span>
         </div>
         <button
           onClick={handleCopy}
-          className="flex items-center space-x-1 text-slate-400 hover:text-white bg-slate-800 px-2.5 py-1 rounded transition-colors"
+          className="flex items-center space-x-1 text-[#FCF0DA] hover:text-[#F2C46A] bg-[#2C2623] hover:bg-[#38322E] px-2.5 py-1 rounded border border-[#AEAC78]/30 transition-colors"
           title="Copy source code"
         >
           {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -44,14 +44,14 @@ export const CodeViewer: React.FC<CodeViewerProps> = ({ code, filename, highligh
               return (
                 <tr
                   key={idx}
-                  className={`hover:bg-slate-800/50 ${
-                    isHighlighted ? 'bg-amber-950/40 border-l-2 border-amber-400' : ''
+                  className={`hover:bg-[#38322E]/60 ${
+                    isHighlighted ? 'bg-[#F2C46A]/20 border-l-2 border-[#F2C46A]' : ''
                   }`}
                 >
-                  <td className="pr-4 text-right text-slate-600 select-none w-10 align-top">
+                  <td className="pr-4 text-right text-[#AEAC78]/80 select-none w-10 align-top">
                     {lineNo}
                   </td>
-                  <td className="text-slate-200 whitespace-pre font-mono">
+                  <td className="text-[#FCF0DA] whitespace-pre font-mono">
                     {line || ' '}
                   </td>
                 </tr>

@@ -1,0 +1,112 @@
+{
+  "model": "microsoft/codebert-base",
+  "model_revision": "3b0952feddeffad0063f274080e3c23d75e7eb39",
+  "seed": 42,
+  "epochs": 3,
+  "batch_size": 4,
+  "max_length": 512,
+  "learning_rate": 2e-05,
+  "python": "3.13.15",
+  "device": "cuda",
+  "gpu": "Tesla T4",
+  "packages": {
+    "torch": "2.11.0+cu128",
+    "transformers": "4.57.1",
+    "scikit-learn": "1.6.1",
+    "numpy": "2.1.3"
+  },
+  "data_report": {
+    "dataset": "basakdemirok/AIGCodeSet",
+    "revision": "b4d4e69fdbcba2608c99808c6afbf53a3bfd108c",
+    "license_declared_by_publisher": "CDLA-Permissive-2.0",
+    "seed": 42,
+    "heldout_generator": "LLAMA",
+    "raw_sha256": {
+      "human_selected_dataset.csv": "f02f1099de41434e67f26dd0470e8cce32ac1a80966cea51c8f9a25b95991de8",
+      "created_dataset_with_llms.csv": "be858efdb3233dff32b4cf239171dd686f9fb968d26cb0ab44c668fa40b2226e",
+      "README.md": "366485d67d815f9a8ca8e6feaecca8fa615144615d595af38c6a8686c496470d"
+    },
+    "excluded": {
+      "ai_repair_or_hybrid": 1887
+    },
+    "audit": {
+      "conflicting_provenance_rows_removed": 38,
+      "same_label_duplicate_rows_removed": 18,
+      "heldout_rows_excluded_from_train_validation": 248,
+      "independent_groups": 317
+    },
+    "splits": {
+      "train": {
+        "rows": 3466,
+        "labels": {
+          "0": 3071,
+          "1": 395
+        },
+        "generators": {
+          "HUMAN": 3071,
+          "CODESTRAL": 197,
+          "GEMINI": 198
+        },
+        "problems": 206
+      },
+      "validation": {
+        "rows": 796,
+        "labels": {
+          "0": 704,
+          "1": 92
+        },
+        "generators": {
+          "HUMAN": 704,
+          "GEMINI": 47,
+          "CODESTRAL": 45
+        },
+        "problems": 47
+      },
+      "test_seen": {
+        "rows": 1068,
+        "labels": {
+          "0": 946,
+          "1": 122
+        },
+        "generators": {
+          "HUMAN": 946,
+          "GEMINI": 60,
+          "CODESTRAL": 62
+        },
+        "problems": 64
+      },
+      "test_unseen": {
+        "rows": 1008,
+        "labels": {
+          "0": 946,
+          "1": 62
+        },
+        "generators": {
+          "HUMAN": 946,
+          "LLAMA": 62
+        },
+        "problems": 64
+      }
+    },
+    "limitations": [
+      "test_seen and test_unseen reuse human test controls; do not pool them",
+      "No author-disjoint guarantee or pretrained-model contamination check",
+      "Token-normalized dedup is not full semantic near-duplicate detection",
+      "Dataset provenance labels are publisher assertions, not proof of authorship",
+      "AI repair/hybrid code excluded; no claim on mixed human/AI code"
+    ]
+  },
+  "seconds": 493.77597880363464,
+  "split_sha256": {
+    "train": "fc2b51d98a0d89406d2ac72bf64bba933c596bfb8b9273b1a7787981ff06511b",
+    "validation": "3d370e254c49c5048f5d5ff368d783293af42275f87ec0c1e98e3961c324d413",
+    "test_seen": "877c676f3af3500ea13f8f09e55593681d93dea708f34a077a28e33cb45bccd6",
+    "test_unseen": "aa98bada951d91c8fd0ba78a0418d27c9bfb37b6f402716c118f943a8387e32b"
+  },
+  "limitations": [
+    "Scores are not calibrated probabilities of authorship",
+    "1% empirical validation FPR is not a deployment guarantee; inspect confidence bound",
+    "Backend still uses 0.35/0.65; selected binary threshold is evaluation only",
+    "No deployment approval; no penalty or academic misconduct decision from this signal"
+  ]
+}

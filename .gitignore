@@ -60,3 +60,23 @@ tools/*.jplag
 model_outputs/
 experiments/codebert/checkpoints/
 experiments/codebert/data/
+*.safetensors
+*.pt
+*.bin
+*.onnx
+*.zip
+
+# Local SQLite databases and test coverage
+*.db
+*.sqlite
+*.sqlite3
+.coverage
+htmlcov/
+
+# AI Agent & Teamwork orchestration artifacts
+.agents/
+PROJECT.md
+TEST_INFRA.md
+TEST_READY.md
+stitch_veripie_ui_redesign/
+

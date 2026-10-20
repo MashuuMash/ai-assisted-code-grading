@@ -7,6 +7,7 @@ from app.routes.assignments import router as assignments_router
 from app.routes.auth import router as auth_router
 from app.routes.classes import router as classes_router
 from app.routes.courses import router as courses_router
+from app.routes.demo import router as demo_router
 from app.routes.feedback import router as feedback_router
 from app.routes.grading import router as grading_router
 from app.routes.rubrics import router as rubrics_router
@@ -37,6 +38,7 @@ app.include_router(rubrics_router, prefix="/api/v1")
 app.include_router(similarity_router, prefix="/api/v1")
 app.include_router(feedback_router, prefix="/api/v1")
 app.include_router(ai_detector_router, prefix="/api/v1")
+app.include_router(demo_router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["health"])
