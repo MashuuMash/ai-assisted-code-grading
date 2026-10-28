@@ -24,6 +24,13 @@ services:
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
       SUBMISSION_STORAGE_PATH: /data/submissions
       JPLAG_JAR_PATH: /tools/jplag-6.2.0.jar
+      AI_PROVIDER: ${AI_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      AI_MODEL: ${AI_MODEL:-gemini-2.5-flash}
+      AI_DETECTOR_MODEL_PATH: ${AI_DETECTOR_MODEL_PATH:-./experiments/codebert/checkpoints/best_model}
+      ENABLE_DEMO_ENDPOINTS: ${ENABLE_DEMO_ENDPOINTS:-true}
     depends_on:
       postgres:
         condition: service_healthy
@@ -35,6 +42,7 @@ services:
       start_period: 120s
     volumes:
       - ./backend:/app
+      - ./experiments:/app/experiments:ro
       - ./tools:/tools:ro
       - submission_data:/data/submissions
     command: ["python", "-m", "app.startup"]

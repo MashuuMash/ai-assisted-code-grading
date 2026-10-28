@@ -180,11 +180,13 @@ def persist_submission_evidence(
     submission_id: int,
     evidence_items: list[SubmissionEvidence],
     replace_existing: bool = True,
+    replace_sources: list[EvidenceSource] | None = None,
 ) -> None:
     if replace_existing:
-        db.execute(
-            delete(SubmissionEvidence).where(SubmissionEvidence.submission_id == submission_id)
-        )
+        stmt = delete(SubmissionEvidence).where(SubmissionEvidence.submission_id == submission_id)
+        if replace_sources:
+            stmt = stmt.where(SubmissionEvidence.source.in_(replace_sources))
+        db.execute(stmt)
     for ev in evidence_items:
         db.add(ev)
     db.commit()

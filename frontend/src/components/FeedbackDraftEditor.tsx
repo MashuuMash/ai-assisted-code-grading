@@ -22,7 +22,6 @@ export const FeedbackDraftEditor: React.FC<FeedbackDraftEditorProps> = ({
   grade,
   onGenerate,
   onSaveFeedback,
-  onSelectEvidence,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedSummary, setEditedSummary] = useState<string>(grade?.feedback_summary || '');
@@ -129,17 +128,17 @@ export const FeedbackDraftEditor: React.FC<FeedbackDraftEditorProps> = ({
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-bold text-[#4C4541] dark:text-[#FCF0DA]">
-                      {item.criterion_title || 'General Criterion'}
+                      {item.criterion_title || 'Improvement Area'}
                     </span>
-                    {item.evidence_id && (
-                      <button
-                        onClick={() => onSelectEvidence && onSelectEvidence(item.evidence_id)}
-                        className="font-mono text-[10px] bg-[#FCF0DA] dark:bg-[#38322E] hover:bg-[#F2C46A]/20 text-[#4C4541] dark:text-[#FCF0DA] border border-[#AEAC78]/40 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
-                        title="Inspect backing evidence item"
-                      >
-                        Evidence: {item.evidence_id.slice(0, 8)}...
-                      </button>
-                    )}
+                    <span
+                      className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${
+                        item.severity === 'error'
+                          ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/40'
+                          : 'bg-[#F2C46A]/20 text-[#6B4307] dark:text-[#F2C46A] border-[#F2C46A]/40'
+                      }`}
+                    >
+                      {item.severity === 'error' ? 'Needs Fix' : 'Suggestion'}
+                    </span>
                   </div>
                   <p className="text-[#4C4541] dark:text-[#FCF0DA]">{item.issue}</p>
                   <p className="text-[#4C4541]/80 dark:text-[#FCF0DA]/80 italic mt-0.5">{item.suggestion}</p>

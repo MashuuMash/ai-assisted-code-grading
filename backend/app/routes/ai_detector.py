@@ -9,7 +9,7 @@ from app.authorization import can_manage_class
 from app.codebert_detector import CodeBertDetector, generate_codebert_evidence
 from app.database import get_db
 from app.evidence_engine import persist_submission_evidence
-from app.models import Assignment, Cohort, Submission, User
+from app.models import Assignment, Cohort, EvidenceSource, Submission, User
 from app.schemas import AiDetectionResponse, BatchAiDetectionResponse
 from app.submission_storage import SubmissionStorage
 
@@ -80,7 +80,12 @@ def detect_ai_code_submission(
         assignment_id=assignment.id,
         prediction=prediction,
     )
-    persist_submission_evidence(db=db, submission_id=submission.id, evidence_items=evidence_items)
+    persist_submission_evidence(
+        db=db,
+        submission_id=submission.id,
+        evidence_items=evidence_items,
+        replace_sources=[EvidenceSource.CODEBERT],
+    )
     db.commit()
 
     ev_id = evidence_items[0].id if evidence_items else None
@@ -134,7 +139,12 @@ def batch_detect_ai_code(
             assignment_id=assignment.id,
             prediction=prediction,
         )
-        persist_submission_evidence(db=db, submission_id=sub.id, evidence_items=evidence_items)
+        persist_submission_evidence(
+            db=db,
+            submission_id=sub.id,
+            evidence_items=evidence_items,
+            replace_sources=[EvidenceSource.CODEBERT],
+        )
 
         if prediction.ai_probability >= 0.65:
             high_prob_count += 1

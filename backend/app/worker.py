@@ -1,7 +1,7 @@
 import logging
 import time
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_settings
@@ -13,6 +13,7 @@ from app.evidence_engine import (
 )
 from app.grading_jobs import transition_job
 from app.models import (
+    EvidenceSource,
     GradingJob,
     GradingJobStatus,
     Submission,
@@ -127,6 +128,8 @@ def process_job(
             job.failure_type = "infrastructure_error"
             job.failure_information = result.infrastructure_error
         else:
+            session.execute(delete(TestResult).where(TestResult.grading_job_id == job.id))
+            session.expire(job, ["results"])
             for item in result.results:
                 job.results.append(
                     TestResult(
@@ -166,6 +169,7 @@ def process_job(
             db=session,
             submission_id=job.submission_id,
             evidence_items=test_evidence + static_evidence,
+            replace_sources=[EvidenceSource.PYTEST, EvidenceSource.RUFF, EvidenceSource.AST],
         )
 
         # Mathematical rubric evaluation

@@ -366,6 +366,7 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
     } else if (tab === 'rubric') {
       setDemoStage(4);
     } else if (tab === 'grading') {
+      loadSubmissionDetail();
       const selected = submissions.find((s) => s.id === selectedSubmissionId);
       if (selected?.student_identifier === '1003' || selected?.id === 1003) {
         setDemoStage(5);

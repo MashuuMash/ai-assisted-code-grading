@@ -367,7 +367,7 @@ def export_gradebook_csv(
     header = ["Submission ID", "Student Identifier", "Student Name", "Original Filename"]
     for c in criteria:
         header.append(f"{c.title} (Max {c.max_points})")
-    header.extend(["Suggested Total", "Final Score", "Status"])
+    header.extend(["Suggested Total", "Final Score", "Status", "Feedback Source", "Feedback Summary"])
     writer.writerow(header)
 
     for sub in submissions:
@@ -390,8 +390,10 @@ def export_gradebook_csv(
             row.append(str(grade.suggested_total_score))
             row.append(str(grade.final_total_score if grade.final_total_score is not None else ""))
             row.append(grade.status.value)
+            row.append(sanitize_csv_cell(grade.feedback_source or ""))
+            row.append(sanitize_csv_cell(grade.feedback_summary or ""))
         else:
-            row.extend(["0.0", "", "ungraded"])
+            row.extend(["0.0", "", "ungraded", "", ""])
 
         writer.writerow(row)
 

@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -451,6 +451,13 @@ def run_similarity_for_assignment(
                 jar_path=settings.jplag_jar_path,
             )
         report.engine = "jplag" if cli_results is not None else "winnowing"
+
+        db.execute(
+            delete(SubmissionEvidence).where(
+                SubmissionEvidence.assignment_id == assignment_id,
+                SubmissionEvidence.source == EvidenceSource.JPLAG,
+            )
+        )
 
         comparisons: list[SimilarityComparison] = []
         n = len(target_submissions)
