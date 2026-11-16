@@ -78,7 +78,7 @@ const AppContent: React.FC = () => {
 
   if (isLoading && !isDemoMode) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 font-mono text-xs">
+      <div className="min-h-screen bg-[#FCF0DA] dark:bg-[#2C2623] flex items-center justify-center text-[#4C4541] dark:text-[#FCF0DA] font-mono text-xs">
         Loading Instructor Workstation...
       </div>
     );

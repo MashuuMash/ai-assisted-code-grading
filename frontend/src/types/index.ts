@@ -7,7 +7,26 @@ export interface User {
   full_name: string;
   role: UserRole;
   is_active: boolean;
+  is_email_verified?: boolean;
+  otp_required?: boolean;
   created_at: string;
+}
+
+export interface OtpResendResponse {
+  message: string;
+  email: string;
+  otp_required: boolean;
+}
+
+export interface ForgotPasswordResponse {
+  message: string;
+  email_hint?: string | null;
+}
+
+export interface ResetPasswordResponse {
+  message: string;
+  access_token?: string | null;
+  token_type?: string;
 }
 
 export interface LoginResponse {

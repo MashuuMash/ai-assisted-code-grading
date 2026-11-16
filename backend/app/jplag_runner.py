@@ -497,6 +497,16 @@ def run_similarity_for_assignment(
                         if match_result.similarity_percentage >= 80.0
                         else EvidenceSeverity.WARNING
                     )
+                    matched_lines_a = [
+                        [r["lines_a"][0], r["lines_a"][1]]
+                        for r in (match_result.matched_regions or [])
+                        if isinstance(r, dict) and len(r.get("lines_a", [])) >= 2
+                    ]
+                    matched_lines_b = [
+                        [r["lines_b"][0], r["lines_b"][1]]
+                        for r in (match_result.matched_regions or [])
+                        if isinstance(r, dict) and len(r.get("lines_b", [])) >= 2
+                    ]
                     ev_a = SubmissionEvidence(
                         id=uuid.uuid4().hex,
                         submission_id=sub_a.id,
@@ -515,6 +525,7 @@ def run_similarity_for_assignment(
                             "matched_submission_id": sub_b.id,
                             "similarity_percentage": match_result.similarity_percentage,
                             "matched_tokens": match_result.matched_tokens,
+                            "matched_lines": matched_lines_a,
                             "engine": report.engine,
                         },
                     )
@@ -536,6 +547,7 @@ def run_similarity_for_assignment(
                             "matched_submission_id": sub_a.id,
                             "similarity_percentage": match_result.similarity_percentage,
                             "matched_tokens": match_result.matched_tokens,
+                            "matched_lines": matched_lines_b,
                             "engine": report.engine,
                         },
                     )

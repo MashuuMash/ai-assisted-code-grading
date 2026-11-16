@@ -60,14 +60,14 @@ export const useWorkstationKeyboard = ({
         return;
       }
 
-      // j/k roster navigation
-      if ((e.key === 'j' || e.key === 'J') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      // k/j roster navigation (k = next submission down, j = previous submission up)
+      if ((e.key === 'k' || e.key === 'K') && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         onNextSubmission();
         return;
       }
 
-      if ((e.key === 'k' || e.key === 'K') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if ((e.key === 'j' || e.key === 'J') && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         onPrevSubmission();
         return;

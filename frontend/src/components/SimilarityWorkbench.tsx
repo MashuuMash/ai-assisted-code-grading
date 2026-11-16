@@ -1,18 +1,22 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Check,
+  Columns,
   Eye,
   Flag,
   Play,
   ShieldAlert,
+  X,
 } from 'lucide-react';
 import { api } from '../api/client';
-import { ComparisonReviewStatus, SimilarityReport } from '../types';
+import { getDemoSubmissionCode } from '../data/demoFixtures';
+import { ComparisonReviewStatus, SimilarityComparison, SimilarityReport, Submission } from '../types';
 
 interface SimilarityWorkbenchProps {
   courseId: number;
   classId: number;
   assignmentId: number;
+  submissions?: Submission[];
   onSelectSubmissions?: (subAId: number, subBId: number) => void;
 }
 
@@ -20,6 +24,7 @@ export const SimilarityWorkbench: React.FC<SimilarityWorkbenchProps> = ({
   courseId,
   classId,
   assignmentId,
+  submissions = [],
   onSelectSubmissions,
 }) => {
   const [reports, setReports] = useState<SimilarityReport[]>([]);
@@ -28,6 +33,44 @@ export const SimilarityWorkbench: React.FC<SimilarityWorkbenchProps> = ({
   const [running, setRunning] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [activeDiffCompId, setActiveDiffCompId] = useState<number | null>(null);
+  const [diffCodes, setDiffCodes] = useState<{ codeA: string; codeB: string; loading: boolean }>({
+    codeA: '',
+    codeB: '',
+    loading: false,
+  });
+  const [draftNotes, setDraftNotes] = useState<Record<number, string>>({});
+
+  const getSubmissionLabel = (subId: number) => {
+    const found = submissions.find((s) => s.id === subId);
+    return found?.student_name ? `${found.student_name} (#${subId})` : `Submission #${subId}`;
+  };
+
+  const handleToggleDiff = async (comp: SimilarityComparison) => {
+    if (activeDiffCompId === comp.id) {
+      setActiveDiffCompId(null);
+      return;
+    }
+    setActiveDiffCompId(comp.id);
+    setDiffCodes({ codeA: '', codeB: '', loading: true });
+    try {
+      const [codeA, codeB] = await Promise.all([
+        api.submissions
+          .getSource(courseId, classId, assignmentId, comp.submission_a_id)
+          .catch(() => getDemoSubmissionCode(comp.submission_a_id)),
+        api.submissions
+          .getSource(courseId, classId, assignmentId, comp.submission_b_id)
+          .catch(() => getDemoSubmissionCode(comp.submission_b_id)),
+      ]);
+      setDiffCodes({ codeA, codeB, loading: false });
+    } catch {
+      setDiffCodes({
+        codeA: getDemoSubmissionCode(comp.submission_a_id),
+        codeB: getDemoSubmissionCode(comp.submission_b_id),
+        loading: false,
+      });
+    }
+  };
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
@@ -208,15 +251,27 @@ export const SimilarityWorkbench: React.FC<SimilarityWorkbenchProps> = ({
             const isMedium = pct >= 40 && pct < 70;
             const isActionBusy = actionLoading === comp.id;
 
+            const isDiffOpen = activeDiffCompId === comp.id;
+            const customNote = draftNotes[comp.id] ?? '';
+            const isLineInRegions = (lineNo: number, side: 'a' | 'b') => {
+              if (!comp.matched_regions || comp.matched_regions.length === 0) return true;
+              return comp.matched_regions.some((reg) => {
+                const span = side === 'a' ? reg.lines_a : reg.lines_b;
+                return lineNo >= span[0] && lineNo <= span[1];
+              });
+            };
+
             return (
               <div
                 key={comp.id}
                 className="p-3 rounded-lg border border-[#AEAC78]/40 dark:border-[#AEAC78]/30 bg-[#FCF0DA]/20 dark:bg-[#2C2623]/60 hover:border-[#AEAC78] transition-colors text-[#4C4541] dark:text-[#FCF0DA]"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-3">
                     <div className="font-mono font-bold text-[#4C4541] dark:text-[#FCF0DA] text-xs">
-                      Submission #{comp.submission_a_id} <span className="text-[#4C4541]/60 dark:text-[#FCF0DA]/60">vs</span> #{comp.submission_b_id}
+                      {getSubmissionLabel(comp.submission_a_id)}{' '}
+                      <span className="text-[#4C4541]/60 dark:text-[#FCF0DA]/60">vs</span>{' '}
+                      {getSubmissionLabel(comp.submission_b_id)}
                     </div>
 
                     <div className="flex items-center space-x-2">
@@ -249,7 +304,7 @@ export const SimilarityWorkbench: React.FC<SimilarityWorkbenchProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <span
                       className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
                         comp.status === 'flagged'
@@ -262,9 +317,29 @@ export const SimilarityWorkbench: React.FC<SimilarityWorkbenchProps> = ({
                       {comp.status}
                     </span>
 
+                    <button
+                      type="button"
+                      onClick={() => handleToggleDiff(comp)}
+                      className={`px-2 py-1 rounded border text-[11px] font-bold inline-flex items-center gap-1 transition-colors cursor-pointer ${
+                        isDiffOpen
+                          ? 'bg-[#4C4541] text-[#FCF0DA] border-[#4C4541]'
+                          : 'bg-[#FFFDF9] dark:bg-[#38322E] hover:bg-[#F2C46A]/30 text-[#4C4541] dark:text-[#FCF0DA] border-[#AEAC78]/50'
+                      }`}
+                      title="Compare Submission A and Submission B side-by-side"
+                    >
+                      {isDiffOpen ? <X className="w-3 h-3" /> : <Columns className="w-3 h-3" />}
+                      <span>{isDiffOpen ? 'Close Diff' : 'Compare Side-by-Side'}</span>
+                    </button>
+
                     {/* Review action buttons */}
                     <button
-                      onClick={() => handleReview(comp.id, 'flagged', 'Flagged for academic review')}
+                      onClick={() =>
+                        handleReview(
+                          comp.id,
+                          'flagged',
+                          customNote.trim() || 'Flagged for academic review'
+                        )
+                      }
                       disabled={isActionBusy}
                       className="p-1 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 rounded border border-rose-200 dark:border-rose-800 transition-colors cursor-pointer"
                       title="Flag candidate pair for investigation"
@@ -273,7 +348,13 @@ export const SimilarityWorkbench: React.FC<SimilarityWorkbenchProps> = ({
                     </button>
 
                     <button
-                      onClick={() => handleReview(comp.id, 'dismissed', 'Verified false positive')}
+                      onClick={() =>
+                        handleReview(
+                          comp.id,
+                          'dismissed',
+                          customNote.trim() || 'Verified false positive'
+                        )
+                      }
                       disabled={isActionBusy}
                       className="p-1 hover:bg-[#FCF0DA] dark:hover:bg-[#38322E] text-[#4C4541] dark:text-[#FCF0DA] rounded border border-[#AEAC78]/40 transition-colors cursor-pointer"
                       title="Dismiss match as false positive"
@@ -309,6 +390,113 @@ export const SimilarityWorkbench: React.FC<SimilarityWorkbenchProps> = ({
                         A: lines {reg.lines_a[0]}-{reg.lines_a[1]} | B: lines {reg.lines_b[0]}-{reg.lines_b[1]}
                       </span>
                     ))}
+                  </div>
+                )}
+
+                {/* Inline Side-by-Side Code Comparison Diff View */}
+                {isDiffOpen && (
+                  <div className="mt-3 rounded-xl border border-[#AEAC78]/50 bg-[#241F1C] text-[#FCF0DA] overflow-hidden shadow-md">
+                    <div className="bg-[#312B27] px-3 py-2 border-b border-[#AEAC78]/25 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                      <span className="font-mono font-bold text-[#F2C46A]">
+                        Side-by-Side Structural Comparison ({pct.toFixed(1)}% Overlap)
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={customNote}
+                          onChange={(e) =>
+                            setDraftNotes((prev) => ({ ...prev, [comp.id]: e.target.value }))
+                          }
+                          placeholder="Optional audit note before Flag/Dismiss..."
+                          aria-label="Similarity review note"
+                          className="rounded border border-[#AEAC78]/40 bg-[#241F1C] px-2 py-0.5 text-[11px] text-[#FCF0DA] placeholder-[#AEAC78]/60 focus:outline-none focus:ring-1 focus:ring-[#F2C46A] w-56"
+                        />
+                        {onSelectSubmissions && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onSelectSubmissions(comp.submission_a_id, comp.submission_b_id)
+                              }
+                              className="rounded bg-[#F2C46A] px-2 py-0.5 font-mono text-[10px] font-bold text-[#4C4541] hover:bg-[#F2C46A]/90 cursor-pointer"
+                            >
+                              Open #{comp.submission_a_id} in Grading
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onSelectSubmissions(comp.submission_b_id, comp.submission_a_id)
+                              }
+                              className="rounded bg-[#AEAC78] px-2 py-0.5 font-mono text-[10px] font-bold text-[#241F1C] hover:bg-[#AEAC78]/90 cursor-pointer"
+                            >
+                              Open #{comp.submission_b_id} in Grading
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {diffCodes.loading ? (
+                      <div className="p-6 text-center font-mono text-xs text-[#AEAC78]">
+                        Loading side-by-side student implementations...
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-[#AEAC78]/25 max-h-80 overflow-y-auto font-mono text-[11px]">
+                        {/* Left Pane: Submission A */}
+                        <div className="p-2.5 overflow-x-auto">
+                          <div className="mb-1.5 pb-1 border-b border-[#AEAC78]/20 flex items-center justify-between text-[10px] text-[#F2C46A] font-bold">
+                            <span>{getSubmissionLabel(comp.submission_a_id)}</span>
+                            <span>Left Candidate</span>
+                          </div>
+                          {diffCodes.codeA.split('\n').map((line, idx) => {
+                            const lineNo = idx + 1;
+                            const matched = isLineInRegions(lineNo, 'a') && line.trim().length > 0;
+                            return (
+                              <div
+                                key={lineNo}
+                                className={`flex items-start gap-2 px-1.5 py-0.5 rounded-xs ${
+                                  matched
+                                    ? 'bg-rose-500/20 border-l-2 border-rose-400'
+                                    : 'border-l-2 border-transparent opacity-80'
+                                }`}
+                              >
+                                <span className="w-5 text-right select-none text-[10px] text-[#AEAC78]/70">
+                                  {lineNo}
+                                </span>
+                                <span className="whitespace-pre text-[#FCF0DA]">{line || ' '}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Right Pane: Submission B */}
+                        <div className="p-2.5 overflow-x-auto">
+                          <div className="mb-1.5 pb-1 border-b border-[#AEAC78]/20 flex items-center justify-between text-[10px] text-[#F2C46A] font-bold">
+                            <span>{getSubmissionLabel(comp.submission_b_id)}</span>
+                            <span>Right Candidate</span>
+                          </div>
+                          {diffCodes.codeB.split('\n').map((line, idx) => {
+                            const lineNo = idx + 1;
+                            const matched = isLineInRegions(lineNo, 'b') && line.trim().length > 0;
+                            return (
+                              <div
+                                key={lineNo}
+                                className={`flex items-start gap-2 px-1.5 py-0.5 rounded-xs ${
+                                  matched
+                                    ? 'bg-rose-500/20 border-l-2 border-rose-400'
+                                    : 'border-l-2 border-transparent opacity-80'
+                                }`}
+                              >
+                                <span className="w-5 text-right select-none text-[10px] text-[#AEAC78]/70">
+                                  {lineNo}
+                                </span>
+                                <span className="whitespace-pre text-[#FCF0DA]">{line || ' '}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

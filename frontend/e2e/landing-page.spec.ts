@@ -26,7 +26,7 @@ test.describe('Showcase Landing Page (R1)', () => {
     await expect(heading).toBeVisible();
 
     // Verify hero headline highlighting evidence-based grading philosophy
-    const heroHeadline = page.getByText(/Evidence First/i);
+    const heroHeadline = page.getByText(/Grading Student Code|Evidence First/i).first();
     await expect(heroHeadline).toBeVisible();
 
     // Verify university capstone / presentation context is communicated
@@ -269,7 +269,7 @@ test.describe('Showcase Landing Page (R1)', () => {
     await page.goto('/');
 
     // 2. Evaluator audits title and core value proposition
-    await expect(page.getByText(/Evidence First/i)).toBeVisible();
+    await expect(page.getByText(/Grading Student Code|Evidence First/i)).toBeVisible();
 
     // 3. Evaluator reviews all 4 pillars in detail
     const pillars = [
@@ -376,6 +376,180 @@ test.describe('Showcase Landing Page (R1)', () => {
       await stepButtons.nth(2).click();
       await expect(page.locator('[data-testid="pipeline-diagram-svg"]').first()).toBeVisible();
     }
+  });
+
+  test('Tier 5: instructor account registration transitions to 6-digit OTP verification and enters workstation', async ({ page }) => {
+    await page.route('**/api/v1/auth/register', async (route) => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 777,
+          email: 'dr.nguyen@university.edu',
+          username: 'dr_nguyen',
+          full_name: 'Dr. Nguyen Van A',
+          role: 'lecturer',
+          is_active: true,
+          is_email_verified: false,
+          otp_required: true,
+          dev_otp_code: '482915',
+          created_at: new Date().toISOString(),
+        }),
+      });
+    });
+
+    await page.route('**/api/v1/auth/verify-otp', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          access_token: 'mock-verified-jwt-token',
+          token_type: 'bearer',
+        }),
+      });
+    });
+
+    await page.route('**/api/v1/auth/me', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 777,
+          email: 'dr.nguyen@university.edu',
+          username: 'dr_nguyen',
+          full_name: 'Dr. Nguyen Van A',
+          role: 'lecturer',
+          is_active: true,
+          is_email_verified: true,
+          created_at: new Date().toISOString(),
+        }),
+      });
+    });
+
+    await page.goto('/');
+    await page.getByRole('button', { name: /^Sign In$/i }).first().click();
+
+    const modal = page.getByTestId('login-modal');
+    await expect(modal).toBeVisible();
+
+    await modal.getByRole('button', { name: /Create Account/i }).click();
+    await modal.getByPlaceholder('Dr. Nguyen Van A').fill('Dr. Nguyen Van A');
+    await modal.getByPlaceholder('lecturer@university.edu').fill('dr.nguyen@university.edu');
+    await modal.getByPlaceholder('lecturer_username').fill('dr_nguyen');
+    await modal.getByPlaceholder('Min. 8 characters').fill('Password123!');
+    await modal.getByPlaceholder('Re-enter password').fill('Password123!');
+
+    await modal.getByRole('button', { name: /Create Instructor Account/i }).click();
+
+    // Verify 6-digit OTP step is displayed (without any sandbox preview box)
+    const otpPanel = modal.getByTestId('otp-verification-panel');
+    await expect(otpPanel).toBeVisible();
+    await expect(modal.getByTestId('dev-otp-banner')).toHaveCount(0);
+
+    // Type the 6 digits across the 6 OTP inputs
+    const digits = ['4', '8', '2', '9', '1', '5'];
+    for (let i = 0; i < 6; i++) {
+      await modal.getByTestId(`otp-digit-${i}`).fill(digits[i]);
+    }
+    await expect(modal.getByTestId('otp-digit-0')).toHaveValue('4');
+    await expect(modal.getByTestId('otp-digit-5')).toHaveValue('5');
+
+    // Submit OTP verification and confirm entry into Workstation
+    await modal.getByRole('button', { name: /Verify & Open Workstation/i }).click();
+    await expect(page.getByTestId('workstation-dashboard')).toBeVisible();
+  });
+
+  test('Tier 5: forgot password flow sends OTP and resets password into workstation', async ({ page }) => {
+    let capturedForgotIdentifier = '';
+    let capturedResetPayload: Record<string, unknown> = {};
+
+    await page.route('**/api/v1/auth/forgot-password', async (route) => {
+      const data = JSON.parse(route.request().postData() || '{}');
+      capturedForgotIdentifier = data.email_or_username;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          message: 'A password reset verification code has been sent to your email.',
+          email_hint: 'd***n@university.edu',
+        }),
+      });
+    });
+
+    await page.route('**/api/v1/auth/reset-password', async (route) => {
+      capturedResetPayload = JSON.parse(route.request().postData() || '{}');
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          message: 'Password reset successfully. You are now logged in.',
+          access_token: 'mock-reset-jwt-token-999',
+          token_type: 'bearer',
+        }),
+      });
+    });
+
+    await page.route('**/api/v1/auth/me', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 888,
+          email: 'dr.nguyen@university.edu',
+          username: 'dr_nguyen',
+          full_name: 'Dr. Nguyen Van A',
+          role: 'lecturer',
+          is_active: true,
+          is_email_verified: true,
+          created_at: new Date().toISOString(),
+        }),
+      });
+    });
+
+    await page.goto('/');
+    await page.getByRole('button', { name: /^Sign In$/i }).first().click();
+
+    const modal = page.getByTestId('login-modal');
+    await expect(modal).toBeVisible();
+
+    // Click "Forgot password?"
+    await modal.getByRole('button', { name: /Forgot password\?/i }).click();
+
+    // Verify Forgot Password Panel
+    const forgotPanel = modal.getByTestId('forgot-password-panel');
+    await expect(forgotPanel).toBeVisible();
+
+    // Enter username / email
+    await forgotPanel.locator('#forgot-identifier-input').fill('dr_nguyen');
+    await forgotPanel.getByRole('button', { name: /Send Password Reset Code/i }).click();
+
+    expect(capturedForgotIdentifier).toBe('dr_nguyen');
+
+    // Verify transition to Reset Password Panel
+    const resetPanel = modal.getByTestId('reset-password-panel');
+    await expect(resetPanel).toBeVisible();
+
+    // Enter 6-digit OTP
+    const resetDigits = ['7', '3', '1', '9', '4', '0'];
+    for (let i = 0; i < 6; i++) {
+      await resetPanel.getByTestId(`reset-otp-digit-${i}`).fill(resetDigits[i]);
+    }
+
+    // Enter new password and confirmation
+    await resetPanel.locator('#reset-new-password').fill('StrongResetPass999!');
+    await resetPanel.locator('#reset-confirm-password').fill('StrongResetPass999!');
+
+    await expect(resetPanel.getByText(/Passwords match/i)).toBeVisible();
+
+    // Submit password reset
+    await resetPanel.getByRole('button', { name: /Reset Password & Sign In/i }).click();
+
+    expect(capturedResetPayload.otp_code).toBe('731940');
+    expect(capturedResetPayload.new_password).toBe('StrongResetPass999!');
+
+    // Modal should close and Workstation should mount
+    await expect(modal).not.toBeVisible();
+    await expect(page.getByTestId('workstation-dashboard')).toBeVisible();
   });
 });
 

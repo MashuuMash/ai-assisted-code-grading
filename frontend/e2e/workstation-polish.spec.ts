@@ -543,4 +543,82 @@ test.describe('Workstation UI/UX Polish & Ergonomics (R3)', () => {
       await searchInput.fill('');
     }
   });
+
+  test('Tier 5: Column 3 Quick-Jump Inspector Dock Bar scrolls inspector-scroll-pane independently', async ({ page }) => {
+    await openWorkstation(page);
+
+    const dockBar = page.getByTestId('inspector-dock-bar');
+    const scrollPane = page.getByTestId('inspector-scroll-pane');
+    await expect(dockBar).toBeVisible();
+    await expect(scrollPane).toBeVisible();
+
+    // Verify scrollPane is genuinely overflow-scrollable on desktop viewport
+    const dimensions = await scrollPane.evaluate((el) => ({
+      scrollHeight: el.scrollHeight,
+      clientHeight: el.clientHeight,
+    }));
+    expect(dimensions.scrollHeight).toBeGreaterThan(dimensions.clientHeight);
+
+    // Click "2. Rubric & Score" and verify scrollTop advances
+    await dockBar.getByRole('button', { name: /Rubric & Score/i }).click();
+    await expect
+      .poll(async () => scrollPane.evaluate((el) => el.scrollTop), { timeout: 3000 })
+      .toBeGreaterThan(200);
+
+    // Click "3. AI Feedback" and verify scrollTop advances further
+    const rubricScrollTop = await scrollPane.evaluate((el) => el.scrollTop);
+    await dockBar.getByRole('button', { name: /AI Feedback/i }).click();
+    await expect
+      .poll(async () => scrollPane.evaluate((el) => el.scrollTop), { timeout: 3000 })
+      .toBeGreaterThan(rubricScrollTop);
+
+    // Click "1. Evidence" and verify scrollTop returns to 0
+    await dockBar.getByRole('button', { name: /Evidence/i }).click();
+    await expect
+      .poll(async () => scrollPane.evaluate((el) => el.scrollTop), { timeout: 3000 })
+      .toBeLessThanOrEqual(8);
+  });
+
+  test('Tier 5: User profile dropdown and Account Settings modal interactions', async ({ page }) => {
+    await openWorkstation(page);
+
+    // 1. Verify User Profile button exists on the far right of Navbar
+    const profileBtn = page.getByTestId('user-profile-button');
+    await expect(profileBtn).toBeVisible();
+
+    // 2. Click User Profile button to open the dropdown menu
+    await profileBtn.click();
+    const dropdown = page.getByTestId('user-profile-dropdown');
+    await expect(dropdown).toBeVisible();
+
+    // Verify dropdown items
+    const settingsItem = page.getByTestId('menu-item-settings');
+    const signOutItem = page.getByTestId('menu-item-sign-out');
+    await expect(settingsItem).toBeVisible();
+    await expect(signOutItem).toBeVisible();
+
+    // 3. Click Account Settings to launch Settings modal
+    await settingsItem.click();
+    await expect(dropdown).not.toBeVisible();
+
+    const settingsModal = page.getByTestId('settings-modal');
+    await expect(settingsModal).toBeVisible();
+    await expect(settingsModal.getByText(/Account Settings/i)).toBeVisible();
+
+    // 4. Check Profile Information Tab contents
+    await expect(settingsModal.getByText(/Role/i)).toBeVisible();
+    await expect(settingsModal.getByText(/Email Address/i)).toBeVisible();
+    await expect(settingsModal.getByLabel(/Full Name/i)).toBeVisible();
+
+    // 5. Switch to Security & Password tab
+    await settingsModal.getByRole('button', { name: /Security & Password/i }).click();
+    await expect(settingsModal.getByLabel(/Current Password/i)).toBeVisible();
+    await expect(settingsModal.getByLabel(/^New Password/i)).toBeVisible();
+    await expect(settingsModal.getByText(/Password Requirements:/i)).toBeVisible();
+
+    // 6. Close Settings modal
+    const closeBtn = settingsModal.getByRole('button', { name: /Close settings dialog/i });
+    await closeBtn.click();
+    await expect(settingsModal).not.toBeVisible();
+  });
 });

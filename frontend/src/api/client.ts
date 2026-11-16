@@ -6,8 +6,11 @@ import {
   CodeBertPrediction,
   Course,
   DetailedFeedbackPayload,
+  ForgotPasswordResponse,
   GradeStatus,
   LoginResponse,
+  OtpResendResponse,
+  ResetPasswordResponse,
   Rubric,
   SimilarityComparison,
   SimilarityReport,
@@ -130,11 +133,38 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
 export const api = {
   auth: {
+    register: async (payload: {
+      full_name: string;
+      username: string;
+      email: string;
+      password: string;
+    }): Promise<User> => {
+      return request<User>('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    verifyOtp: async (email_or_username: string, otp_code: string): Promise<LoginResponse> => {
+      const data = await request<LoginResponse>('/auth/verify-otp', {
+        method: 'POST',
+        body: JSON.stringify({ email_or_username, otp_code }),
+      });
+      localStorage.removeItem('is_demo_mode');
+      setToken(data.access_token);
+      return data;
+    },
+    resendOtp: async (email_or_username: string): Promise<OtpResendResponse> => {
+      return request<OtpResendResponse>('/auth/resend-otp', {
+        method: 'POST',
+        body: JSON.stringify({ email_or_username }),
+      });
+    },
     loginJson: async (username_or_email: string, password: string): Promise<LoginResponse> => {
       const data = await request<LoginResponse>('/auth/login/json', {
         method: 'POST',
         body: JSON.stringify({ username_or_email, password }),
       });
+      localStorage.removeItem('is_demo_mode');
       setToken(data.access_token);
       return data;
     },
@@ -145,6 +175,39 @@ export const api = {
         if (isDemoModeActive()) return demoUser;
         throw err;
       }
+    },
+    updateProfile: async (full_name: string): Promise<User> => {
+      return request<User>('/auth/me', {
+        method: 'PATCH',
+        body: JSON.stringify({ full_name }),
+      });
+    },
+    changePassword: async (current_password: string, new_password: string): Promise<{ message: string }> => {
+      return request<{ message: string }>('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ current_password, new_password }),
+      });
+    },
+    forgotPassword: async (email_or_username: string): Promise<ForgotPasswordResponse> => {
+      return request<ForgotPasswordResponse>('/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email_or_username }),
+      });
+    },
+    resetPassword: async (payload: {
+      email_or_username: string;
+      otp_code: string;
+      new_password: string;
+    }): Promise<ResetPasswordResponse> => {
+      const data = await request<ResetPasswordResponse>('/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      if (data.access_token) {
+        localStorage.removeItem('is_demo_mode');
+        setToken(data.access_token);
+      }
+      return data;
     },
     logout: () => {
       setToken(null);

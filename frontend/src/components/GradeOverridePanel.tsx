@@ -31,7 +31,7 @@ export const GradeOverridePanel: React.FC<GradeOverridePanelProps> = ({
 
   if (!grade) {
     return (
-      <div className="bg-[#FFFDF9] dark:bg-[#38322E] p-5 rounded-xl border border-[#AEAC78]/40 dark:border-[#AEAC78]/30 text-center text-[#4C4541] dark:text-[#FCF0DA] shadow-xs">
+      <div className="bg-[#FFFDF9] dark:bg-[#38322E] p-6 rounded-2xl border border-[#AEAC78]/35 dark:border-[#AEAC78]/25 text-center text-[#4C4541] dark:text-[#FCF0DA] shadow-sm">
         <p className="text-xs text-[#4C4541]/80 dark:text-[#FCF0DA]/80 mb-3">No mathematical grade calculated yet.</p>
         {error && <p role="alert" className="mb-3 text-sm text-rose-700 dark:text-rose-400 font-semibold">{error}</p>}
         <button
@@ -95,7 +95,7 @@ export const GradeOverridePanel: React.FC<GradeOverridePanelProps> = ({
   const isConfirmed = grade.status === 'confirmed';
 
   return (
-    <div className="bg-[#FFFDF9] dark:bg-[#38322E] rounded-xl border border-[#AEAC78]/40 dark:border-[#AEAC78]/30 shadow-xs p-4 text-xs text-[#4C4541] dark:text-[#FCF0DA]">
+    <div className="bg-[#FFFDF9] dark:bg-[#38322E] rounded-2xl border border-[#AEAC78]/35 dark:border-[#AEAC78]/25 shadow-sm p-5 text-xs text-[#4C4541] dark:text-[#FCF0DA] h-full flex flex-col justify-between">
       <div className="flex items-center justify-between pb-3 border-b border-[#AEAC78]/30 dark:border-[#AEAC78]/20">
         <div>
           <span className="text-[11px] font-bold text-[#AEAC78] dark:text-[#F2C46A] uppercase tracking-wider">

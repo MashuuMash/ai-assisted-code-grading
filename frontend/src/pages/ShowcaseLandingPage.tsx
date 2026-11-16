@@ -1,12 +1,30 @@
 import React, { useState } from 'react';
 import {
+  Archive,
+  ArrowRight,
   Bot,
+  BrainCircuit,
   Check,
   CheckCircle2,
   Cpu,
   FileSearch,
+  FolderArchive,
+  GitCompare,
+  GraduationCap,
   Layers,
+  LogIn,
+  MapPin,
+  PieChart,
+  Play,
+  Quote,
+  RefreshCw,
+  ShieldCheck,
   Sliders,
+  Sparkles,
+  Terminal,
+  X,
+  XCircle,
+  Zap,
 } from 'lucide-react';
 import {
   Stage1IngestDiagram,
@@ -16,6 +34,7 @@ import {
   Stage5ReviewDiagram,
 } from '../assets/LandingVisuals';
 import { LoginModal } from '../components/LoginModal';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 export interface ShowcaseLandingPageProps {
   onLaunchDemo?: () => void;
@@ -114,9 +133,9 @@ const PILLARS: PillarData[] = [
     title: 'Code Similarity & Anti-Plagiarism',
     badge: 'Karp-Rabin + JPlag 6.2',
     icon: FileSearch,
-    statValue: 100,
+    statValue: 95,
     statSuffix: '%',
-    statLabel: 'Boilerplate Template Subtracted',
+    statLabel: 'AST Match Precision · 0% Boilerplate',
     summary:
       'Dual-engine Karp-Rabin token winnowing and JPlag 6.2 AST structure comparison eliminating starter boilerplate.',
     highlights: ['Variable-Invariant', 'AST Structure Match'],
@@ -126,9 +145,9 @@ const PILLARS: PillarData[] = [
     title: '4-Tier Rubric & Formula Engine',
     badge: '100% Normalized Math',
     icon: Sliders,
-    statValue: 100,
-    statSuffix: '%',
-    statLabel: 'Normalized Weight across 4 Tiers',
+    statValue: 4,
+    statSuffix: ' Tiers',
+    statLabel: '100% Normalized Weight Formula',
     summary:
       'Multi-category float scoring across automated test suites (40%), Ruff PEP8 (20%), AST (20%), and manual review (20%).',
     highlights: ['0.4T + 0.2R + 0.2A + 0.2M', 'Deterministic Audit'],
@@ -140,7 +159,7 @@ const PILLARS: PillarData[] = [
     icon: Bot,
     statValue: 100,
     statSuffix: '%',
-    statLabel: 'Evidence-Cited Claims',
+    statLabel: 'Evidence-Cited Claims · Zero Hallucination',
     summary:
       'Every AI suggestion cites verifiable evidence IDs with offline rulebook fallback and human lecturer decision last.',
     highlights: ['[EVID_*] Anchored', 'Instructor Sign-off'],
@@ -241,14 +260,52 @@ interface AssertionChip {
   time: string;
   status: 'PASSED' | 'FAILED';
   line: number;
+  codeLines: number[];
+  trace: string;
   description: string;
 }
 
 const MOCKUP_CHIPS: AssertionChip[] = [
-  { id: 'c1', name: 'test_basic', time: '14ms', status: 'PASSED', line: 83, description: 'Standard complementary pair evaluation' },
-  { id: 'c2', name: 'test_negative', time: '18ms', status: 'PASSED', line: 89, description: 'Negative values and zero-sum verification' },
-  { id: 'c3', name: 'test_large_n', time: '42ms', status: 'PASSED', line: 92, description: 'Large array scale and O(n log n) constraint test' },
-  { id: 'c4', name: 'test_bounds', time: '16ms', status: 'PASSED', line: 94, description: 'Single element and boundary limits test' },
+  {
+    id: 'c1',
+    name: 'test_basic',
+    time: '14ms',
+    status: 'PASSED',
+    line: 7,
+    codeLines: [7, 8, 9, 10],
+    trace: 'find_target_pairs([2, 7, 11, 15], 9) == [(2, 7)]',
+    description: 'Standard complementary pair evaluation',
+  },
+  {
+    id: 'c2',
+    name: 'test_negative',
+    time: '18ms',
+    status: 'PASSED',
+    line: 8,
+    codeLines: [8, 9, 10],
+    trace: 'find_target_pairs([-3, 0, 3, 6], 0) == [(-3, 3)]',
+    description: 'Negative values and zero-sum verification',
+  },
+  {
+    id: 'c3',
+    name: 'test_large_n',
+    time: '42ms',
+    status: 'PASSED',
+    line: 5,
+    codeLines: [5, 6, 7, 11, 12],
+    trace: 'len(nums)=50_000 -> O(n log n) hash-set scan verified',
+    description: 'Large array scale and O(n log n) constraint test',
+  },
+  {
+    id: 'c4',
+    name: 'test_bounds',
+    time: '16ms',
+    status: 'PASSED',
+    line: 10,
+    codeLines: [10, 12],
+    trace: 'find_target_pairs([5], 10) == [] (empty boundary safe)',
+    description: 'Single element and boundary limits test',
+  },
 ];
 
 const NAV_SECTIONS = [
@@ -263,6 +320,7 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
   // Interactive Mockup State
   const [selectedChipId, setSelectedChipId] = useState<string>('c1');
   const [mockupApproved, setMockupApproved] = useState<boolean>(false);
+  const [showInlineOverride, setShowInlineOverride] = useState<boolean>(false);
   const [isSimulatingRun, setIsSimulatingRun] = useState<boolean>(false);
   const [simulatedScore, setSimulatedScore] = useState<number>(10.0);
   const [passedChipIds, setPassedChipIds] = useState<string[]>(['c1', 'c2', 'c3', 'c4']);
@@ -270,6 +328,12 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
   const [highlightedEvidenceKey, setHighlightedEvidenceKey] = useState<string | null>(null);
   const [executionTimestamp, setExecutionTimestamp] = useState<string>('0.12s');
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
+
+  const activeChip = MOCKUP_CHIPS.find((c) => c.id === selectedChipId) || MOCKUP_CHIPS[0];
+  const isLineActive = (lineNo: number) =>
+    highlightedEvidenceKey === 'EVID_TEST_03'
+      ? lineNo >= 7 && lineNo <= 10
+      : activeChip.codeLines.includes(lineNo);
 
   // Header Scroll-Spy State & Sliding Indicator
   const [activeNavId, setActiveNavId] = useState<string>('demo');
@@ -364,16 +428,16 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
 
   return (
     <div data-testid="workstation-root" className="min-h-screen bg-surface font-sans text-on-surface antialiased selection:bg-primary-fixed selection:text-on-primary-fixed">
-      {/* HEADER BAR (Stitch Specification) */}
-      <header className="fixed top-0 w-full z-50 bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-surface-container-high/60">
-        <div className="h-20 max-w-[1320px] mx-auto px-gutter-lg flex items-center justify-between">
+      {/* HEADER BAR (Warm Rigor Specification) */}
+      <header className="fixed top-0 w-full z-50 bg-surface/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(76,69,65,0.06)] border-b border-outline-variant/40">
+        <div className="h-20 max-w-[1320px] mx-auto px-3 sm:px-gutter-lg flex items-center justify-between gap-2">
           {/* Logo & Platform Title */}
-          <div className="flex items-center gap-space-lg">
+          <div className="flex items-center gap-space-md shrink-0">
             <a className="flex items-center" href="#" aria-label="VeriPie Home">
               <img
                 src="/logo.png"
                 alt="VeriPie Logo"
-                className="h-10 sm:h-11 md:h-12 w-auto object-contain shrink-0"
+                className="h-9 sm:h-11 md:h-12 w-auto object-contain shrink-0"
               />
             </a>
           </div>
@@ -415,21 +479,23 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
             })}
           </nav>
 
-          {/* Actions: Sign In & 1-Click Demo */}
-          <div className="flex items-center gap-space-md">
+          {/* Actions: Theme Toggle, Sign In & 1-Click Demo */}
+          <div className="flex items-center gap-1.5 sm:gap-space-sm">
+            <ThemeToggle />
             <button
               type="button"
               onClick={() => setIsLoginModalOpen(true)}
-              className="hidden sm:inline-flex items-center px-space-md py-space-sm text-on-surface-variant hover:text-on-surface font-label-md text-label-md transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 sm:px-space-md sm:py-space-sm rounded-lg border border-outline-variant/40 bg-surface-container-lowest text-on-surface hover:bg-surface-container-low font-label-md text-xs sm:text-label-md transition-colors cursor-pointer"
             >
-              Sign In
+              <LogIn className="w-3.5 h-3.5 text-secondary shrink-0" />
+              <span>Sign In</span>
             </button>
             <button
               onClick={onLaunchDemo}
               type="button"
-              className="inline-flex items-center justify-center px-space-lg py-space-sm bg-gradient-to-r from-primary-container to-tertiary text-on-primary font-label-md text-label-md rounded-lg shadow-sm hover:opacity-95 transition-all hover:-translate-y-0.5 active:scale-95 cursor-pointer"
+              className="inline-flex items-center justify-center px-3 py-1.5 sm:px-space-lg sm:py-space-sm bg-primary-container hover:bg-primary-container/90 text-on-primary font-label-md text-xs sm:text-label-md rounded-lg shadow-sm transition-all hover:-translate-y-0.5 active:scale-95 cursor-pointer border border-outline-variant/40"
             >
-              Try Interactive Demo
+              <span>Try Interactive Demo</span>
             </button>
           </div>
         </div>
@@ -444,25 +510,14 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
 
             {/* HERO SECTION */}
             <section id="hero" className="max-w-[1320px] mx-auto px-gutter-lg pt-space-xl pb-margin-lg flex flex-col items-center text-center">
-              {/* Punchy Badge */}
-              <div
-                data-testid="stitch-pill-badge"
-                className="inline-flex items-center gap-space-xs px-space-md py-space-xs rounded-full bg-surface-container text-on-surface font-label-mono text-label-mono shadow-sm"
-              >
-                <span className="text-primary-container material-symbols-outlined text-[14px]">auto_awesome</span>
-                <span className="font-semibold text-on-surface">Next-Gen Python Grading Engine</span>
-                <span className="mx-space-xs text-outline-variant">•</span>
-                <span className="text-secondary font-medium">Easy as Pie • Evidence First</span>
-              </div>
-
               {/* Main Hero Headline */}
               <h1
                 data-testid="showcase-title"
-                className="mt-space-lg max-w-4xl font-display-hero text-display-hero text-on-surface tracking-tight"
+                className="max-w-4xl font-display-hero text-display-hero text-on-surface tracking-tight"
               >
                 Grading Student Code <br className="hidden sm:inline" />
-                <span className="bg-gradient-to-r from-primary via-tertiary to-primary-container bg-clip-text text-transparent">
-                  Shouldn't Take All Night.
+                <span className="underline decoration-primary-container decoration-4 underline-offset-8">
+                  Shouldn&apos;t Take All Night.
                 </span>
               </h1>
 
@@ -476,16 +531,16 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                 <button
                   type="button"
                   onClick={onLaunchDemo}
-                  className="inline-flex items-center justify-center gap-space-sm px-space-xl py-space-md bg-primary-container hover:bg-primary-container/90 text-on-primary font-label-md text-label-md rounded-lg shadow-md hover:shadow-lg transition-transform hover:-translate-y-0.5 active:scale-95 cursor-pointer"
+                  className="inline-flex items-center justify-center gap-space-sm px-space-xl py-space-md bg-primary-container hover:bg-primary-container/90 text-on-primary font-label-md text-label-md rounded-lg shadow-md hover:shadow-lg transition-transform hover:-translate-y-0.5 active:scale-95 cursor-pointer border border-on-surface/15"
                 >
                   <span>Launch Interactive Live Demo</span>
-                  <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                  <ArrowRight className="w-4 h-4 shrink-0" />
                 </button>
                 <a
                   href="#demo"
-                  className="inline-flex items-center justify-center gap-space-sm px-space-xl py-space-md bg-surface-container-lowest text-on-surface font-label-md text-label-md rounded-lg shadow-sm hover:bg-surface-container-low transition-colors border border-outline-variant/30"
+                  className="inline-flex items-center justify-center gap-space-sm px-space-xl py-space-md bg-surface-container-lowest text-on-surface font-label-md text-label-md rounded-lg shadow-sm hover:bg-surface-container-low transition-colors border border-outline-variant/40"
                 >
-                  <span className="material-symbols-outlined text-[18px] text-secondary">terminal</span>
+                  <Terminal className="w-4 h-4 text-secondary shrink-0" />
                   <span>View Grading Workstation</span>
                 </a>
               </div>
@@ -493,15 +548,15 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
               {/* Trust Badges Strip */}
               <div className="mt-space-lg flex flex-wrap items-center justify-center gap-x-space-xl gap-y-space-sm font-label-mono text-label-mono text-on-surface-variant">
                 <div className="flex items-center gap-space-xs">
-                  <span className="text-primary-container material-symbols-outlined text-[16px]">bolt</span>
+                  <Zap className="w-4 h-4 text-primary shrink-0" />
                   <span>Sub-Second Sandbox Execution (0.8s)</span>
                 </div>
                 <div className="flex items-center gap-space-xs">
-                  <span className="text-secondary material-symbols-outlined text-[16px]">verified_user</span>
+                  <ShieldCheck className="w-4 h-4 text-secondary shrink-0" />
                   <span>JPlag + Winnowing Plagiarism Guard</span>
                 </div>
                 <div className="flex items-center gap-space-xs">
-                  <span className="text-tertiary material-symbols-outlined text-[16px]">smart_toy</span>
+                  <Bot className="w-4 h-4 text-tertiary shrink-0" />
                   <span>Hallucination-Proof AI Explanations</span>
                 </div>
               </div>
@@ -511,10 +566,10 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                 id="demo"
                 data-testid="hero-workstation-mockup"
                 onMouseMove={handleCardMouseMove}
-                className="spotlight-card mt-space-xl w-full max-w-[1180px] bg-surface-container-lowest rounded-xl shadow-xl overflow-hidden text-left border border-outline-variant/30"
+                className="spotlight-card mt-space-xl w-full max-w-[1180px] bg-surface-container-lowest rounded-xl shadow-xl overflow-hidden text-left border border-outline-variant/40"
               >
                 {/* Mockup Chrome Header Bar */}
-                <div className="bg-surface-container-low px-space-lg py-space-sm flex items-center justify-between border-b border-surface-container-high/60">
+                <div className="bg-surface-container-low px-space-lg py-space-sm flex flex-wrap items-center justify-between gap-2 border-b border-outline-variant/30">
                   <div className="flex items-center gap-space-md">
                     <div className="flex items-center gap-1.5">
                       <span className="w-3 h-3 rounded-full bg-error inline-block" />
@@ -522,7 +577,7 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                       <span className="w-3 h-3 rounded-full bg-secondary inline-block" />
                     </div>
                     <div className="flex items-center gap-space-xs font-label-mono text-label-mono text-on-surface-variant">
-                      <span className="material-symbols-outlined text-[16px] text-secondary">folder_zip</span>
+                      <FolderArchive className="w-4 h-4 text-secondary shrink-0" />
                       <span>CS101_Assignment4 / student_submission_921.py</span>
                     </div>
                   </div>
@@ -534,16 +589,18 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                       className="px-2.5 py-1 rounded bg-primary-container hover:bg-primary-container/90 text-on-primary font-mono text-[11px] font-bold flex items-center gap-1.5 shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-60"
                       title="Simulate Docker sandbox execution and autograding"
                     >
-                      <span className={`material-symbols-outlined text-[14px] ${isSimulatingRun ? 'animate-spin' : ''}`}>
-                        {isSimulatingRun ? 'refresh' : 'play_arrow'}
-                      </span>
+                      {isSimulatingRun ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+                      ) : (
+                        <Play className="w-3.5 h-3.5 shrink-0" />
+                      )}
                       <span>{isSimulatingRun ? 'Executing...' : 'Simulate Run'}</span>
                     </button>
                     <span className="px-space-sm py-0.5 rounded bg-surface-container-high text-on-secondary-container hidden sm:inline-block">
-                      Sandbox: isolated-alpine:3.12
+                      Sandbox: isolated-alpine:3.19
                     </span>
                     <span className={`px-space-sm py-0.5 rounded bg-primary-fixed text-on-primary-fixed flex items-center gap-1 font-semibold transition-all duration-300 ${isSimulatingRun ? 'ring-2 ring-primary-container animate-pulse' : ''}`}>
-                      <span className="w-2 h-2 rounded-full bg-primary" /> {simulatedScore.toFixed(1)} / 10.0
+                      <span className="w-2 h-2 rounded-full bg-secondary" /> {simulatedScore.toFixed(1)} / 10.0
                     </span>
                   </div>
                 </div>
@@ -551,54 +608,73 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                 {/* Dual Code / Rubric Panel View */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[460px]">
                   {/* Left: Code Editor Inspection */}
-                  <div className="lg:col-span-7 bg-[#1e1e24] text-[#ecf1ff] p-space-lg font-code-sm text-code-sm flex flex-col justify-between overflow-x-auto relative">
+                  <div className="lg:col-span-7 bg-[#241F1C] text-[#FCF0DA] p-space-lg font-code-sm text-code-sm flex flex-col justify-between overflow-x-auto relative">
                     {/* Scanline Sweep Effect during active run */}
                     {isSimulatingRun && (
                       <div className="absolute inset-x-0 h-16 bg-gradient-to-b from-transparent via-primary-container/30 to-transparent pointer-events-none animate-scanline z-10" />
                     )}
                     <div>
                       <div className="flex items-center justify-between pb-space-sm mb-space-sm border-b border-white/10 font-label-mono text-label-mono">
-                        <span className="text-slate-400"># VERIFIED STUDENT IMPLEMENTATION (AUTOGRADED)</span>
-                        <span className="text-tertiary-fixed font-semibold">AST: Validated O(n log n)</span>
+                        <span className="text-[#AEAC78]"># VERIFIED STUDENT IMPLEMENTATION (AUTOGRADED)</span>
+                        <span className="text-[#F2C46A] font-semibold">AST: Validated O(n log n)</span>
                       </div>
                       <pre className="leading-relaxed font-mono">
-                        <code data-testid="mockup-code" className="text-[#ecf1ff] block font-mono text-xs">
-                          <div><span className="text-[#93ccff]">from</span> typing <span className="text-[#93ccff]">import</span> List, Tuple</div>
-                          <div>&nbsp;</div>
-                          <div><span className="text-[#ffb95f]">def</span> <span className="text-white font-bold">find_target_pairs</span>(nums: List[<span className="text-[#cce5ff]">int</span>], target: <span className="text-[#cce5ff]">int</span>) -&gt; List[Tuple[<span className="text-[#cce5ff]">int</span>, <span className="text-[#cce5ff]">int</span>]]:</div>
-                          <div className="text-slate-400">&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Returns all unique complementary pairs satisfying the sum target.&quot;&quot;&quot;</div>
-                          <div>&nbsp;&nbsp;&nbsp;&nbsp;seen = <span className="text-[#cce5ff]">set</span>()</div>
-                          <div>&nbsp;&nbsp;&nbsp;&nbsp;output = <span className="text-[#cce5ff]">set</span>()</div>
-                          <div className={`transition-all duration-300 rounded px-1.5 -mx-1.5 ${highlightedEvidenceKey === 'EVID_TEST_03' ? 'bg-amber-500/25 border-l-2 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : ''}`}>
-                            <div>&nbsp;&nbsp;&nbsp;&nbsp;<span className="text-[#93ccff]">for</span> val <span className="text-[#93ccff]">in</span> nums:</div>
-                            <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;complement = target - val</div>
-                            <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span className="text-[#93ccff]">if</span> complement <span className="text-[#93ccff]">in</span> seen:</div>
-                            <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output.add((<span className="text-[#cce5ff]">min</span>(val, complement), <span className="text-[#cce5ff]">max</span>(val, complement)))</div>
-                          </div>
-                          <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seen.add(val)</div>
-                          <div>&nbsp;&nbsp;&nbsp;&nbsp;<span className="text-[#93ccff]">return</span> <span className="text-[#cce5ff]">sorted</span>(<span className="text-[#cce5ff]">list</span>(output))</div>
+                        <code data-testid="mockup-code" className="text-[#FCF0DA] block font-mono text-xs space-y-0.5">
+                          {[
+                            { no: 1, content: <><span className="text-[#93ccff]">from</span> typing <span className="text-[#93ccff]">import</span> List, Tuple</> },
+                            { no: 2, content: <>&nbsp;</> },
+                            { no: 3, content: <><span className="text-[#F2C46A]">def</span> <span className="text-[#FCF0DA] font-bold">find_target_pairs</span>(nums: List[<span className="text-[#6EE7B7]">int</span>], target: <span className="text-[#6EE7B7]">int</span>) -&gt; List[Tuple[<span className="text-[#6EE7B7]">int</span>, <span className="text-[#6EE7B7]">int</span>]]:</> },
+                            { no: 4, content: <span className="text-[#AEAC78]">&nbsp;&nbsp;&nbsp;&nbsp;&quot;&quot;&quot;Returns all unique complementary pairs satisfying the sum target.&quot;&quot;&quot;</span> },
+                            { no: 5, content: <>&nbsp;&nbsp;&nbsp;&nbsp;seen = <span className="text-[#6EE7B7]">set</span>()</> },
+                            { no: 6, content: <>&nbsp;&nbsp;&nbsp;&nbsp;output = <span className="text-[#6EE7B7]">set</span>()</> },
+                            { no: 7, content: <>&nbsp;&nbsp;&nbsp;&nbsp;<span className="text-[#93ccff]">for</span> val <span className="text-[#93ccff]">in</span> nums:</> },
+                            { no: 8, content: <>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;complement = target - val</> },
+                            { no: 9, content: <>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span className="text-[#93ccff]">if</span> complement <span className="text-[#93ccff]">in</span> seen:</> },
+                            { no: 10, content: <>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output.add((<span className="text-[#6EE7B7]">min</span>(val, complement), <span className="text-[#6EE7B7]">max</span>(val, complement)))</> },
+                            { no: 11, content: <>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seen.add(val)</> },
+                            { no: 12, content: <>&nbsp;&nbsp;&nbsp;&nbsp;<span className="text-[#93ccff]">return</span> <span className="text-[#6EE7B7]">sorted</span>(<span className="text-[#6EE7B7]">list</span>(output))</> },
+                          ].map((line) => {
+                            const highlighted = isLineActive(line.no);
+                            return (
+                              <div
+                                key={line.no}
+                                className={`flex items-center gap-3 rounded px-1.5 py-0.5 transition-all duration-200 ${
+                                  highlighted
+                                    ? 'bg-[#F2C46A]/20 border-l-2 border-[#F2C46A]'
+                                    : 'border-l-2 border-transparent'
+                                }`}
+                              >
+                                <span className="w-5 select-none text-right text-[10px] text-[#AEAC78]/70">
+                                  {String(line.no).padStart(2, '0')}
+                                </span>
+                                <span className="flex-1">{line.content}</span>
+                              </div>
+                            );
+                          })}
                         </code>
                       </pre>
                       {highlightedEvidenceKey === 'EVID_TEST_03' && (
-                        <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded bg-amber-500/20 border border-amber-400/40 text-amber-300 font-mono text-[10px] animate-scale-pop">
-                          <span className="material-symbols-outlined text-[13px]">search_check</span>
-                          <span>Target lines 7-10 anchored to [EVID_TEST_03]: Complementary pair match verified</span>
+                        <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#F2C46A]/20 border border-[#F2C46A]/40 text-[#F2C46A] font-mono text-[10px]">
+                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                          <span>Target lines 07-10 anchored to [EVID_TEST_03]: Complementary pair match verified</span>
                         </div>
                       )}
                     </div>
 
-                    {/* Interactive Pytest Assertion Chips */}
-                    <div className="mt-space-lg bg-black/40 rounded-lg p-space-md border border-white/10">
-                      <div className="flex items-center justify-between font-label-mono text-label-mono text-[#ecf1ff]">
-                        <span className="flex items-center gap-1.5 text-secondary-fixed">
-                          <span className={`material-symbols-outlined text-[16px] ${isSimulatingRun ? 'animate-spin text-amber-400' : 'text-emerald-400'}`}>
-                            {isSimulatingRun ? 'refresh' : 'check_circle'}
-                          </span>
+                    {/* Interactive Pytest Assertion Chips + Active Trace Inspector */}
+                    <div className="mt-space-lg bg-black/35 rounded-lg p-space-md border border-white/10">
+                      <div className="flex items-center justify-between font-label-mono text-label-mono text-[#FCF0DA]">
+                        <span className="flex items-center gap-1.5 text-[#6EE7B7]">
+                          {isSimulatingRun ? (
+                            <RefreshCw className="w-4 h-4 animate-spin text-[#F2C46A] shrink-0" />
+                          ) : (
+                            <CheckCircle2 className="w-4 h-4 text-[#6EE7B7] shrink-0" />
+                          )}
                           <span>
                             {isSimulatingRun ? 'Running Pytest Sandbox...' : `${passedChipIds.length} / 4 Deterministic Tests Passed`}
                           </span>
                         </span>
-                        <span className="text-slate-400 font-mono">Execution time: {executionTimestamp}</span>
+                        <span className="text-[#AEAC78] font-mono">Execution time: {executionTimestamp}</span>
                       </div>
                       <div className="mt-space-xs grid grid-cols-2 sm:grid-cols-4 gap-space-xs font-label-mono text-label-mono">
                         {MOCKUP_CHIPS.map((chip) => {
@@ -613,15 +689,27 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                               onClick={() => setSelectedChipId(chip.id)}
                               className={`px-2 py-1.5 rounded text-center transition-all cursor-pointer text-xs font-mono flex items-center justify-center gap-1 ${
                                 selectedChipId === chip.id
-                                  ? 'bg-primary-container text-on-primary font-bold ring-2 ring-primary-container/40'
-                                  : 'bg-white/10 hover:bg-white/20 text-[#ffddb8]'
+                                  ? 'bg-primary-container text-on-primary font-bold ring-2 ring-primary-container/50'
+                                  : 'bg-white/10 hover:bg-white/20 text-[#FCF0DA]'
                               }`}
                             >
                               <span>{chip.name}</span>
-                              <span>{isRunning ? '⏳' : isPassed ? '[PASS]' : '[..]'}</span>
+                              <span>{isRunning ? '[RUN]' : isPassed ? '[PASS]' : '[..]'}</span>
                             </button>
                           );
                         })}
+                      </div>
+                      {/* Selected Assertion Trace Detail Bar */}
+                      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded bg-white/5 px-2.5 py-1.5 font-mono text-[11px] text-[#FCF0DA]/90 border border-white/10">
+                        <div className="flex items-center gap-2">
+                          <span className="rounded bg-[#2E6B56] px-1.5 py-0.5 text-[10px] font-bold text-[#FCF0DA]">
+                            {activeChip.name}
+                          </span>
+                          <span className="text-[#F2C46A]">{activeChip.trace}</span>
+                        </div>
+                        <span className="text-[#AEAC78]">
+                          Lines {activeChip.codeLines.map((n) => String(n).padStart(2, '0')).join(', ')} · {activeChip.time}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -635,15 +723,15 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                           <p className="font-body-sm text-body-sm text-on-surface-variant">Deterministic Mathematical Weighting</p>
                         </div>
                         <div className="w-12 h-12 rounded-full bg-primary-fixed flex items-center justify-center font-headline-sm text-headline-sm font-bold text-on-primary-fixed shadow-sm">
-                          100%
+                          {Math.round(simulatedScore * 10)}%
                         </div>
                       </div>
 
                       {/* Rubric Breakdown Rows */}
                       <div className="mt-space-md space-y-space-sm">
-                        <div className="p-space-sm rounded-lg bg-surface-container-lowest shadow-sm flex items-center justify-between">
+                        <div className="p-space-sm rounded-lg bg-surface-container-lowest shadow-sm flex items-center justify-between border border-outline-variant/25">
                           <div className="flex items-center gap-space-sm">
-                            <span className="material-symbols-outlined text-secondary text-[20px]">task_alt</span>
+                            <CheckCircle2 className="w-5 h-5 text-secondary shrink-0" />
                             <div>
                               <p className="font-label-md text-label-md text-on-surface">Tier 1: Pytest Suite</p>
                               <p className="font-body-sm text-body-sm text-on-surface-variant">Public &amp; Hidden Test Cases</p>
@@ -652,9 +740,9 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                           <span className="font-label-mono text-label-mono font-bold text-secondary">4.0 / 4.0 pts</span>
                         </div>
 
-                        <div className="p-space-sm rounded-lg bg-surface-container-lowest shadow-sm flex items-center justify-between">
+                        <div className="p-space-sm rounded-lg bg-surface-container-lowest shadow-sm flex items-center justify-between border border-outline-variant/25">
                           <div className="flex items-center gap-space-sm">
-                            <span className="material-symbols-outlined text-secondary text-[20px]">auto_fix_high</span>
+                            <Sparkles className="w-5 h-5 text-secondary shrink-0" />
                             <div>
                               <p className="font-label-md text-label-md text-on-surface">Tier 2: Ruff Static Lint</p>
                               <p className="font-body-sm text-body-sm text-on-surface-variant">PEP8, Type Annotations</p>
@@ -663,9 +751,9 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                           <span className="font-label-mono text-label-mono font-bold text-secondary">2.0 / 2.0 pts</span>
                         </div>
 
-                        <div className="p-space-sm rounded-lg bg-surface-container-lowest shadow-sm flex items-center justify-between">
+                        <div className="p-space-sm rounded-lg bg-surface-container-lowest shadow-sm flex items-center justify-between border border-outline-variant/25">
                           <div className="flex items-center gap-space-sm">
-                            <span className="material-symbols-outlined text-primary-container text-[20px]">psychology</span>
+                            <BrainCircuit className="w-5 h-5 text-primary shrink-0" />
                             <div>
                               <p className="font-label-md text-label-md text-on-surface">Tier 3: AST Complexity</p>
                               <p className="font-body-sm text-body-sm text-on-surface-variant">McCabe Complexity &lt;= 4</p>
@@ -674,24 +762,24 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                           <span className="font-label-mono text-label-mono font-bold text-primary">2.0 / 2.0 pts</span>
                         </div>
 
-                        <div className="p-space-sm rounded-lg bg-surface-container-lowest shadow-sm flex items-center justify-between">
+                        <div className="p-space-sm rounded-lg bg-surface-container-lowest shadow-sm flex items-center justify-between border border-outline-variant/25">
                           <div className="flex items-center gap-space-sm">
-                            <span className="material-symbols-outlined text-tertiary text-[20px]">format_image_left</span>
+                            <GitCompare className="w-5 h-5 text-tertiary shrink-0" />
                             <div>
                               <p className="font-label-md text-label-md text-on-surface">Plagiarism Index (JPlag)</p>
                               <p className="font-body-sm text-body-sm text-on-surface-variant">Template subtracted: 4.2% sim</p>
                             </div>
                           </div>
-                          <span className="px-space-sm py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-mono text-label-mono">
+                          <span className="px-space-sm py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-mono text-label-mono font-bold">
                             PASS (Clean)
                           </span>
                         </div>
                       </div>
 
                       {/* AI Grounded Draft Card */}
-                      <div data-testid="mockup-ai-card" className="mt-space-md p-space-sm rounded-lg bg-tertiary-fixed/30 shadow-sm border border-tertiary-fixed/40 transition-all hover:shadow-md">
+                      <div data-testid="mockup-ai-card" className="mt-space-md p-space-sm rounded-lg bg-tertiary-fixed/30 shadow-sm border border-outline-variant/40 transition-all hover:shadow-md">
                         <div className="flex items-center gap-space-xs font-label-mono text-label-mono text-on-tertiary-fixed-variant mb-1">
-                          <span className="material-symbols-outlined text-[16px]">format_quote</span>
+                          <Quote className="w-3.5 h-3.5 shrink-0" />
                           <span>Citation-Grounded AI Draft [Ready for Approval]</span>
                         </div>
                         <p className="font-body-sm text-body-sm text-on-surface-variant">
@@ -699,14 +787,49 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                           <code
                             onMouseEnter={() => setHighlightedEvidenceKey('EVID_TEST_03')}
                             onMouseLeave={() => setHighlightedEvidenceKey(null)}
-                            className="font-label-mono bg-surface-container-lowest px-1.5 py-0.5 rounded text-primary font-bold cursor-pointer hover:bg-primary-container hover:text-on-primary transition-all shadow-sm ring-1 ring-primary/30 inline-flex items-center gap-0.5"
+                            onClick={() =>
+                              setHighlightedEvidenceKey((prev) =>
+                                prev === 'EVID_TEST_03' ? null : 'EVID_TEST_03'
+                              )
+                            }
+                            className="font-label-mono bg-surface-container-lowest px-1.5 py-0.5 rounded text-primary font-bold cursor-pointer hover:bg-primary-container hover:text-on-primary transition-all shadow-sm ring-1 ring-primary/30 inline-flex items-center gap-1"
                           >
-                            <span className="material-symbols-outlined text-[13px]">pin_drop</span>
+                            <MapPin className="w-3 h-3 shrink-0" />
                             EVID_TEST_03
                           </code>{' '}
                           and duplicates handling verified.
                         </p>
                       </div>
+
+                      {/* Inline Instructor Override Drawer when toggled */}
+                      {showInlineOverride && (
+                        <div className="mt-space-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest p-3 shadow-xs">
+                          <div className="flex items-center justify-between text-xs font-bold text-on-surface mb-1">
+                            <span>Manual Instructor Score Override</span>
+                            <span className="font-mono text-secondary">{simulatedScore.toFixed(1)} / 10.0 pts</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={10}
+                            step={0.5}
+                            aria-label="Mockup score override slider"
+                            value={simulatedScore}
+                            onChange={(e) => setSimulatedScore(Number(e.target.value))}
+                            className="w-full accent-[#2E6B56] cursor-pointer"
+                          />
+                          <div className="mt-1.5 flex items-center justify-between text-[11px] text-on-surface-variant">
+                            <span>Adjusts Tier 4 Lecturer Review weight</span>
+                            <button
+                              type="button"
+                              onClick={onLaunchDemo}
+                              className="font-bold text-secondary underline hover:opacity-80 cursor-pointer"
+                            >
+                              Open Full Workstation -&gt;
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Instructor Action Buttons */}
@@ -716,19 +839,18 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                         onClick={() => setMockupApproved(!mockupApproved)}
                         className={`flex-1 py-space-sm px-space-md rounded-lg shadow-sm font-label-md text-label-md transition-all flex items-center justify-center gap-space-xs cursor-pointer active:scale-95 ${
                           mockupApproved
-                            ? 'bg-emerald-600 text-white shadow-emerald-500/20'
+                            ? 'bg-secondary text-on-secondary ring-2 ring-secondary/40'
                             : 'bg-secondary text-on-secondary hover:opacity-95'
                         }`}
                       >
-                        <span className="material-symbols-outlined text-[16px]">
-                          {mockupApproved ? 'check' : 'done_all'}
-                        </span>
+                        <Check className="w-4 h-4 shrink-0" />
                         <span>{mockupApproved ? 'Grade Published!' : 'Approve Grade & Post'}</span>
                       </button>
                       <button
                         type="button"
-                        onClick={onLaunchDemo}
-                        className="py-space-sm px-space-md bg-surface-container-highest text-on-surface font-label-md text-label-md rounded-lg hover:bg-surface-container transition-colors cursor-pointer"
+                        aria-expanded={showInlineOverride}
+                        onClick={() => setShowInlineOverride((prev) => !prev)}
+                        className="py-space-sm px-space-md bg-surface-container-highest text-on-surface font-label-md text-label-md rounded-lg hover:bg-surface-container transition-colors cursor-pointer border border-outline-variant/40"
                       >
                         Override
                       </button>
@@ -761,7 +883,7 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                     01
                   </div>
                   <div className="flex items-center gap-space-xs mb-space-xs font-label-mono text-label-mono text-primary font-semibold">
-                    <span className="material-symbols-outlined text-[18px]">archive</span>
+                    <Archive className="w-4 h-4 shrink-0" />
                     <span>INGESTION &amp; DEFENSE</span>
                   </div>
                   <h3 className="font-headline-sm text-headline-sm text-on-surface mb-space-sm">Ingest &amp; Sanitize</h3>
@@ -779,7 +901,7 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                     02
                   </div>
                   <div className="flex items-center gap-space-xs mb-space-xs font-label-mono text-label-mono text-secondary font-semibold">
-                    <span className="material-symbols-outlined text-[18px]">memory</span>
+                    <Cpu className="w-4 h-4 shrink-0" />
                     <span>CONTAINER ISOLATION</span>
                   </div>
                   <h3 className="font-headline-sm text-headline-sm text-on-surface mb-space-sm">Deterministic Run</h3>
@@ -797,7 +919,7 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                     03
                   </div>
                   <div className="flex items-center gap-space-xs mb-space-xs font-label-mono text-label-mono text-tertiary font-semibold">
-                    <span className="material-symbols-outlined text-[18px]">verified</span>
+                    <ShieldCheck className="w-4 h-4 shrink-0" />
                     <span>HUMAN-IN-THE-LOOP</span>
                   </div>
                   <h3 className="font-headline-sm text-headline-sm text-on-surface mb-space-sm">Verified AI Feedback</h3>
@@ -864,6 +986,40 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                   {activeStage.description}
                 </p>
 
+                {/* Stage Inputs & Outputs Contracts */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                  <div className="rounded-lg bg-surface-container-low p-2.5 border border-outline-variant/30">
+                    <span className="font-label-mono text-[10px] font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5">
+                      Stage Inputs
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {activeStage.inputs.map((inp) => (
+                        <span
+                          key={inp}
+                          className="rounded bg-surface-container-lowest px-2 py-0.5 font-mono text-[11px] font-medium text-on-surface border border-outline-variant/30"
+                        >
+                          {inp}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-surface-container-low p-2.5 border border-outline-variant/30">
+                    <span className="font-label-mono text-[10px] font-bold uppercase tracking-wider text-secondary block mb-1.5">
+                      Verified Outputs
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {activeStage.outputs.map((out) => (
+                        <span
+                          key={out}
+                          className="rounded bg-secondary-fixed px-2 py-0.5 font-mono text-[11px] font-bold text-on-secondary-fixed"
+                        >
+                          {out}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="space-y-space-xs pt-space-xs">
                   <span className="font-label-mono text-[11px] text-on-surface font-bold uppercase tracking-wide block">
                     Engineering Guarantees
@@ -913,8 +1069,8 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                   >
                     <div>
                       <div className="flex items-center justify-between gap-2 mb-space-md">
-                        <div className="w-9 h-9 rounded-lg bg-surface-container-high flex items-center justify-center text-primary-container shrink-0">
-                          <pillar.icon className="w-4 h-4 text-primary-container" />
+                        <div className="w-9 h-9 rounded-lg bg-surface-container-high flex items-center justify-center text-primary shrink-0">
+                          <pillar.icon className="w-4 h-4 text-primary" />
                         </div>
                         <span
                           data-testid="pillar-badge"
@@ -926,7 +1082,7 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
 
                       {/* Animated Stat Block */}
                       <div className="mb-space-sm py-space-sm px-space-md rounded-lg bg-surface-container-low border border-outline-variant/25">
-                        <div className="font-headline-md text-headline-md font-bold text-primary-container tracking-tight">
+                        <div className="font-headline-md text-headline-md font-bold text-primary tracking-tight">
                           <AnimatedCounter target={pillar.statValue} suffix={pillar.statSuffix} />
                         </div>
                         <div className="font-label-mono text-[11px] text-on-surface-variant font-medium">
@@ -962,7 +1118,7 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
           {/* INTERACTIVE COMPARISON: BEFORE VS WITH VERIPIE */}
           <section id="comparison" className="w-full bg-surface-container-low py-margin-lg">
             <div className="max-w-[1320px] mx-auto px-gutter-lg">
-              <div className="text-center max-w-2xl mx-auto mb-space-xl">
+              <div className="text-center max-w-2xl mx-auto mb-space-lg">
                 <span className="font-label-mono text-label-mono uppercase tracking-wider text-primary font-bold">
                   Workflow Transformation
                 </span>
@@ -974,30 +1130,57 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                 </p>
               </div>
 
+              {/* Visual Turnaround Time Comparison Bar */}
+              <div className="mb-space-lg rounded-xl border border-outline-variant/40 bg-surface-container-lowest p-4 shadow-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-on-surface mb-2">
+                  <span>Cohort Grading Turnaround (250 Python Submissions)</span>
+                  <span className="font-mono text-secondary">94% Faster Instructor Review</span>
+                </div>
+                <div className="space-y-2 font-mono text-xs">
+                  <div className="flex items-center gap-3">
+                    <span className="w-32 shrink-0 text-on-surface-variant">Manual Scripts</span>
+                    <div className="flex-1 h-6 rounded bg-surface-container-high overflow-hidden flex items-center">
+                      <div className="h-full w-full bg-error/85 text-[#FCF0DA] px-2.5 flex items-center justify-between text-[11px] font-bold">
+                        <span>Unpack + Shell Run + Manual Diff</span>
+                        <span>14.0 hrs</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="w-32 shrink-0 font-bold text-on-surface">VeriPie Studio</span>
+                    <div className="flex-1 h-6 rounded bg-surface-container-high overflow-hidden flex items-center">
+                      <div className="h-full w-[16%] min-w-[135px] bg-secondary text-[#FCF0DA] px-2.5 flex items-center justify-between text-[11px] font-bold">
+                        <span>0.75 hrs (45m)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-space-lg">
                 {/* Without VeriPie Card */}
                 <div className="bg-surface-container-lowest rounded-xl p-space-xl shadow-sm border-l-4 border-error">
                   <div className="flex items-center gap-space-sm mb-space-md">
-                    <span className="material-symbols-outlined text-error text-[28px]">cancel</span>
+                    <XCircle className="w-7 h-7 text-error shrink-0" />
                     <span className="font-headline-sm text-headline-sm text-on-surface font-bold">
                       Without VeriPie (Manual Chaos)
                     </span>
                   </div>
                   <ul className="space-y-space-md font-body-md text-body-md text-on-surface-variant">
                     <li className="flex items-start gap-space-sm">
-                      <span className="material-symbols-outlined text-error text-[18px] shrink-0 mt-0.5">close</span>
+                      <X className="w-4 h-4 text-error shrink-0 mt-1" />
                       <span><strong>14+ Hours Per Assignment:</strong> Manually unpacking LMS zip archives and fighting corrupted encodings.</span>
                     </li>
                     <li className="flex items-start gap-space-sm">
-                      <span className="material-symbols-outlined text-error text-[18px] shrink-0 mt-0.5">close</span>
+                      <X className="w-4 h-4 text-error shrink-0 mt-1" />
                       <span><strong>Host Machine Risk:</strong> Running untrusted student scripts directly in host terminal with potential file-wiping bugs.</span>
                     </li>
                     <li className="flex items-start gap-space-sm">
-                      <span className="material-symbols-outlined text-error text-[18px] shrink-0 mt-0.5">close</span>
+                      <X className="w-4 h-4 text-error shrink-0 mt-1" />
                       <span><strong>Inconsistent TA Grading:</strong> Different teaching assistants apply varying subjective penalties for PEP8 and complexity.</span>
                     </li>
                     <li className="flex items-start gap-space-sm">
-                      <span className="material-symbols-outlined text-error text-[18px] shrink-0 mt-0.5">close</span>
+                      <X className="w-4 h-4 text-error shrink-0 mt-1" />
                       <span><strong>Hallucinatory Feedback:</strong> Raw AI autograders inventing non-existent compiler bugs and confusing learners.</span>
                     </li>
                   </ul>
@@ -1006,26 +1189,26 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                 {/* With VeriPie Card */}
                 <div className="bg-surface-container-lowest rounded-xl p-space-xl shadow-md border-l-4 border-primary-container">
                   <div className="flex items-center gap-space-sm mb-space-md">
-                    <span className="material-symbols-outlined text-primary-container text-[28px]">check_circle</span>
+                    <CheckCircle2 className="w-7 h-7 text-secondary shrink-0" />
                     <span className="font-headline-sm text-headline-sm text-on-surface font-bold">
                       With VeriPie (Easy as Pie)
                     </span>
                   </div>
                   <ul className="space-y-space-md font-body-md text-body-md text-on-surface-variant">
                     <li className="flex items-start gap-space-sm">
-                      <span className="material-symbols-outlined text-secondary text-[18px] shrink-0 mt-0.5">check</span>
+                      <Check className="w-4 h-4 text-secondary shrink-0 mt-1" />
                       <span><strong>45-Minute Total Turnaround:</strong> Upload once, let the sandboxed runner execute 250+ submissions in parallel.</span>
                     </li>
                     <li className="flex items-start gap-space-sm">
-                      <span className="material-symbols-outlined text-secondary text-[18px] shrink-0 mt-0.5">check</span>
+                      <Check className="w-4 h-4 text-secondary shrink-0 mt-1" />
                       <span><strong>Total Kernel Isolation:</strong> Alpine Docker sandbox strictly prevents socket exfiltration and disk writes.</span>
                     </li>
                     <li className="flex items-start gap-space-sm">
-                      <span className="material-symbols-outlined text-secondary text-[18px] shrink-0 mt-0.5">check</span>
+                      <Check className="w-4 h-4 text-secondary shrink-0 mt-1" />
                       <span><strong>Deterministic Fairness:</strong> 4-tier rubric ensures identical mathematical scoring standards across all TAs.</span>
                     </li>
                     <li className="flex items-start gap-space-sm">
-                      <span className="material-symbols-outlined text-secondary text-[18px] shrink-0 mt-0.5">check</span>
+                      <Check className="w-4 h-4 text-secondary shrink-0 mt-1" />
                       <span><strong>Citation-Grounded AI:</strong> Every piece of student advice links to actual line numbers and assertion keys.</span>
                     </li>
                   </ul>
@@ -1036,14 +1219,14 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
 
           {/* CALL TO ACTION & LECTURER ACCESS (WARM GRADIENT CARD) */}
           <section id="login-card" className="max-w-[1320px] mx-auto px-gutter-lg py-margin-lg w-full">
-            <div className="bg-gradient-to-br from-surface-container via-surface-container-high to-primary-fixed/30 rounded-xl p-space-xl md:p-margin-lg shadow-xl text-center relative overflow-hidden border border-outline-variant/30">
+            <div className="bg-gradient-to-br from-surface-container via-surface-container-high to-primary-fixed/30 rounded-xl p-space-xl md:p-margin-lg shadow-xl text-center relative overflow-hidden border border-outline-variant/40">
               {/* Decorative background accent circle */}
               <div className="absolute -bottom-24 -right-24 w-80 h-80 bg-primary-container/20 rounded-full blur-2xl pointer-events-none" />
               <div className="absolute -top-24 -left-24 w-80 h-80 bg-secondary-container/20 rounded-full blur-2xl pointer-events-none" />
 
               <div className="relative z-10 max-w-2xl mx-auto">
-                <div className="inline-flex items-center gap-space-xs px-space-md py-space-xs rounded-full bg-surface-container-lowest text-on-surface font-label-mono text-label-mono shadow-sm mb-space-md">
-                  <span className="material-symbols-outlined text-[16px] text-primary-container">pie_chart</span>
+                <div className="inline-flex items-center gap-space-xs px-space-md py-space-xs rounded-full bg-surface-container-lowest text-on-surface font-label-mono text-label-mono shadow-sm mb-space-md border border-outline-variant/30">
+                  <PieChart className="w-4 h-4 text-primary shrink-0" />
                   <span>Accurate to the Last Crumb</span>
                 </div>
                 <h2 className="font-headline-lg text-headline-lg text-on-surface tracking-tight">
@@ -1058,10 +1241,10 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                   <button
                     type="button"
                     onClick={onLaunchDemo}
-                    className="px-space-xl py-space-md bg-gradient-to-r from-primary-container to-tertiary text-on-primary font-label-md text-label-md rounded-lg shadow-md hover:shadow-lg transition-transform hover:-translate-y-0.5 inline-flex items-center gap-space-xs cursor-pointer"
+                    className="px-space-xl py-space-md bg-primary-container hover:bg-primary-container/90 text-on-primary font-label-md text-label-md rounded-lg shadow-md hover:shadow-lg transition-transform hover:-translate-y-0.5 inline-flex items-center gap-space-xs cursor-pointer border border-on-surface/15"
                   >
                     <span>Start Free Instructor Trial</span>
-                    <span className="material-symbols-outlined text-[18px]">school</span>
+                    <GraduationCap className="w-4 h-4 shrink-0" />
                   </button>
                   <button
                     type="button"
@@ -1069,7 +1252,7 @@ export const ShowcaseLandingPage: React.FC<ShowcaseLandingPageProps> = ({ onLaun
                     className="px-space-xl py-space-md bg-surface-container-lowest text-on-surface font-label-md text-label-md rounded-lg shadow-sm hover:bg-surface-container-low transition-colors inline-flex items-center gap-space-xs cursor-pointer border border-outline-variant/40"
                   >
                     <span>Sign In to Workstation</span>
-                    <span className="material-symbols-outlined text-[18px]">login</span>
+                    <LogIn className="w-4 h-4 shrink-0" />
                   </button>
                 </div>
               </div>

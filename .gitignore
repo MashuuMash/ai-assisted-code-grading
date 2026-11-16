@@ -4,22 +4,21 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
-venv/
+/env/
+/venv/
 .venv/
-ENV/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
+/ENV/
+/build/
+/dist/
+/downloads/
+/eggs/
 .eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
+/wheels/
 *.egg-info/
 .installed.cfg
 *.egg
@@ -38,6 +37,7 @@ yarn-error.log*
 # Environment and secrets
 .env
 *.env.local
+.env.*.local
 
 # Storage and volumes
 submission_data/
@@ -51,7 +51,7 @@ Thumbs.db
 *.swp
 *.swo
 
-# Docker
+# Docker & external tools
 *.tar
 tools/*.jar
 tools/*.jplag
@@ -73,10 +73,5 @@ experiments/codebert/data/
 .coverage
 htmlcov/
 
-# AI Agent & Teamwork orchestration artifacts
-.agents/
-PROJECT.md
-TEST_INFRA.md
-TEST_READY.md
-stitch_veripie_ui_redesign/
-
+# Local sample test fixtures
+/sample_test_data/

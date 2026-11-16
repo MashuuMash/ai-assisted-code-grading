@@ -62,13 +62,13 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
             </h3>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="flex items-center justify-between p-2 rounded-lg bg-[#FCF0DA]/20 dark:bg-[#2C2623]/50 border border-[#AEAC78]/30">
-                <span className="text-[#4C4541] dark:text-[#FCF0DA]">Next submission</span>
+                <span className="text-[#4C4541] dark:text-[#FCF0DA]">Previous submission</span>
                 <kbd className="px-2 py-0.5 font-mono text-[11px] font-bold bg-[#FFFDF9] dark:bg-[#2C2623] border border-[#AEAC78]/60 rounded text-[#4C4541] dark:text-[#FCF0DA] shadow-xs">
                   j
                 </kbd>
               </div>
               <div className="flex items-center justify-between p-2 rounded-lg bg-[#FCF0DA]/20 dark:bg-[#2C2623]/50 border border-[#AEAC78]/30">
-                <span className="text-[#4C4541] dark:text-[#FCF0DA]">Previous submission</span>
+                <span className="text-[#4C4541] dark:text-[#FCF0DA]">Next submission</span>
                 <kbd className="px-2 py-0.5 font-mono text-[11px] font-bold bg-[#FFFDF9] dark:bg-[#2C2623] border border-[#AEAC78]/60 rounded text-[#4C4541] dark:text-[#FCF0DA] shadow-xs">
                   k
                 </kbd>

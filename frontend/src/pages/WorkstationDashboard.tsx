@@ -1,9 +1,14 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   Archive,
   BookOpen,
   Bot,
   Check,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Cpu,
   Download,
   FileSearch,
   GraduationCap,
@@ -17,7 +22,7 @@ import {
 import { api, DemoSeedResponse } from '../api/client';
 import { cn } from '../lib/cn';
 import { BatchIngestModal } from '../components/BatchIngestModal';
-import { CodeViewer } from '../components/CodeViewer';
+import { CodeViewer, HighlightKind, LineHighlight } from '../components/CodeViewer';
 import { EvidenceInspector } from '../components/EvidenceInspector';
 import { FeedbackDraftEditor } from '../components/FeedbackDraftEditor';
 import { GradeOverridePanel } from '../components/GradeOverridePanel';
@@ -57,6 +62,221 @@ import {
 } from '../types';
 
 type ActiveTab = 'setup' | 'assignment' | 'grading' | 'rubric' | 'similarity';
+
+function deriveCodeHighlights(
+  code: string,
+  evidenceList: SubmissionEvidence[],
+  category: string,
+  selectedEvidence: SubmissionEvidence | null
+): {
+  highlights: LineHighlight[];
+  summary: { kind: HighlightKind; title: string } | null;
+} {
+  const lines = code.split('\n');
+  const totalLines = lines.length;
+  if (totalLines === 0) return { highlights: [], summary: null };
+
+  const targetItems = selectedEvidence
+    ? [selectedEvidence]
+    : category !== 'all'
+    ? evidenceList.filter((e) => e.source === category || e.category === category)
+    : [];
+
+  if (targetItems.length === 0) {
+    return { highlights: [], summary: null };
+  }
+
+  const lineMap = new Map<number, LineHighlight>();
+
+  const addLine = (lineNo: number, kind: HighlightKind, label?: string) => {
+    if (lineNo < 1 || lineNo > totalLines) return;
+    const existing = lineMap.get(lineNo);
+    if (!existing || label) {
+      lineMap.set(lineNo, { line: lineNo, kind, label: label || existing?.label });
+    }
+  };
+
+  for (const item of targetItems) {
+    // 1. Similarity (JPlag / Winnowing)
+    if (item.source === 'jplag' || item.category === 'similarity') {
+      if (item.source === 'codebert') {
+        // Handled below in AI Style Signal branch
+      } else {
+        const simLabel = `Similarity Match (${Math.round(item.metric_value || 0)}%)`;
+        const matchedRanges = item.raw_data?.matched_lines;
+        if (Array.isArray(matchedRanges) && matchedRanges.length > 0) {
+          matchedRanges.forEach((range: number[], rIdx: number) => {
+            if (Array.isArray(range) && range.length >= 2) {
+              const start = Math.max(1, Number(range[0]));
+              const end = Math.min(totalLines, Number(range[1]));
+              for (let l = start; l <= end; l++) {
+                if (lines[l - 1]?.trim()) {
+                  addLine(l, 'similarity', l === start && rIdx === 0 ? simLabel : undefined);
+                }
+              }
+            }
+          });
+        } else {
+          let labeledFirst = false;
+          lines.forEach((lineText, idx) => {
+            const trimmed = lineText.trim();
+            if (trimmed && !trimmed.startsWith('#')) {
+              const isDef = trimmed.startsWith('def ');
+              addLine(
+                idx + 1,
+                'similarity',
+                !labeledFirst || isDef ? simLabel : undefined
+              );
+              labeledFirst = true;
+            }
+          });
+        }
+        continue;
+      }
+    }
+
+    // 2. AI Style Signal (CodeBERT)
+    if (item.source === 'codebert') {
+      const probPct = Math.round((item.metric_value || 0) * 100);
+      const aiLabel = `AI Style Signal (${probPct}%)`;
+      let inDocstring = false;
+      let markedAny = false;
+
+      lines.forEach((lineText, idx) => {
+        const trimmed = lineText.trim();
+        const lineNo = idx + 1;
+        const tripleQuotes = (trimmed.match(/"""|'''/g) || []).length;
+
+        if (tripleQuotes > 0) {
+          addLine(lineNo, 'ai', !markedAny ? aiLabel : 'LLM Docstring Pattern');
+          markedAny = true;
+          if (tripleQuotes === 1) {
+            inDocstring = !inDocstring;
+          }
+          return;
+        }
+        if (inDocstring) {
+          addLine(lineNo, 'ai');
+          return;
+        }
+        if (trimmed.startsWith('def ') && (trimmed.includes('->') || trimmed.includes(':'))) {
+          addLine(
+            lineNo,
+            'ai',
+            !markedAny
+              ? aiLabel
+              : trimmed.includes('->')
+              ? 'Type-Annotated Signature'
+              : undefined
+          );
+          markedAny = true;
+          return;
+        }
+        if (trimmed.startsWith('#') && trimmed.length > 18) {
+          addLine(lineNo, 'ai', !markedAny ? aiLabel : 'Structured Comment');
+          markedAny = true;
+          return;
+        }
+        if ((item.metric_value || 0) >= 0.5 && trimmed && !trimmed.startsWith('import ')) {
+          addLine(lineNo, 'ai', !markedAny ? aiLabel : undefined);
+          markedAny = true;
+        }
+      });
+
+      if (!markedAny) {
+        lines.forEach((lineText, idx) => {
+          if (lineText.trim()) {
+            addLine(idx + 1, 'ai', idx === 0 ? aiLabel : undefined);
+          }
+        });
+      }
+      continue;
+    }
+
+    // 3. Explicit line location (Ruff Linter & AST Complexity)
+    const locMatch = item.location?.match(/:(\d+)/);
+    const explicitLine = item.raw_data?.line_number
+      ? Number(item.raw_data.line_number)
+      : locMatch
+      ? Number(locMatch[1])
+      : null;
+
+    if (explicitLine && explicitLine >= 1 && explicitLine <= totalLines) {
+      if (item.source === 'ruff') {
+        addLine(explicitLine, 'lint', `Ruff ${item.rule_code}`);
+      } else if (item.source === 'ast') {
+        const baseIndent = lines[explicitLine - 1]?.search(/\S|$/) ?? 0;
+        addLine(explicitLine, 'complexity', `AST ${item.rule_code}`);
+        for (let l = explicitLine + 1; l <= Math.min(totalLines, explicitLine + 8); l++) {
+          const text = lines[l - 1];
+          if (!text.trim()) continue;
+          const indent = text.search(/\S|$/);
+          if (indent >= baseIndent && baseIndent > 0) {
+            addLine(l, 'complexity');
+          } else {
+            break;
+          }
+        }
+      } else {
+        addLine(explicitLine, 'default', item.rule_code);
+      }
+      continue;
+    }
+
+    // 4. Pytest automated test evidence -> highlight tested function block
+    if (item.source === 'pytest') {
+      const msg = `${item.message} ${item.raw_data?.test_name || ''}`.toLowerCase();
+      let matchedFuncStart = -1;
+      lines.forEach((lineText, idx) => {
+        const m = lineText.match(/^\s*def\s+([a-zA-Z0-9_]+)\s*\(/);
+        if (m) {
+          const fnName = m[1].toLowerCase();
+          const rootToken = fnName.replace(/^is_|^get_|^calculate_|^compute_/, '');
+          if (msg.includes(fnName) || (rootToken.length >= 3 && msg.includes(rootToken))) {
+            matchedFuncStart = idx + 1;
+          }
+        }
+      });
+
+      if (matchedFuncStart !== -1) {
+        const kind: HighlightKind = item.severity === 'error' ? 'similarity' : 'test';
+        const label =
+          item.severity === 'error'
+            ? `Failed: ${item.raw_data?.test_name || item.rule_code}`
+            : `Passed: ${item.raw_data?.test_name || item.rule_code}`;
+        addLine(matchedFuncStart, kind, label);
+        for (let l = matchedFuncStart + 1; l <= totalLines; l++) {
+          const text = lines[l - 1];
+          if (/^\s*def\s+/.test(text)) break;
+          if (text.trim()) {
+            addLine(l, kind);
+          }
+        }
+      }
+    }
+  }
+
+  const highlights = Array.from(lineMap.values()).sort((a, b) => a.line - b.line);
+  if (highlights.length === 0) return { highlights: [], summary: null };
+
+  const primaryKind = highlights[0].kind;
+  const summaryTitle = selectedEvidence
+    ? `${selectedEvidence.rule_code}: ${selectedEvidence.message}`
+    : category === 'jplag'
+    ? 'Similarity Match Highlight (AST & Token Regions)'
+    : category === 'codebert'
+    ? 'AI Style Signal Highlight (CodeBERT Stylistic Markers)'
+    : category === 'ruff'
+    ? 'Ruff Linter Diagnostics Highlight'
+    : category === 'ast'
+    ? 'AST Structural Complexity Highlight'
+    : 'Automated Test Target Function Highlight';
+
+  return {
+    highlights,
+    summary: { kind: primaryKind, title: summaryTitle },
+  };
+}
 
 export interface WorkstationDashboardProps {
   isDemoMode?: boolean;
@@ -115,6 +335,35 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
 
   // UI state
   const [activeTab, setActiveTab] = useState<ActiveTab>('grading');
+  const [evidenceCategory, setEvidenceCategory] = useState<string>('all');
+  const [selectedEvidence, setSelectedEvidence] = useState<SubmissionEvidence | null>(null);
+  const [manualJumpLine, setManualJumpLine] = useState<number | null>(null);
+  const [activeDockSection, setActiveDockSection] = useState<'evidence' | 'rubric' | 'feedback'>('evidence');
+  const col3ScrollRef = useRef<HTMLDivElement>(null);
+  const programmaticScrollUntilRef = useRef<number>(0);
+
+  const scrollToDockSection = (section: 'evidence' | 'rubric' | 'feedback') => {
+    setActiveDockSection(section);
+    programmaticScrollUntilRef.current = Date.now() + 550;
+
+    const container = col3ScrollRef.current;
+    const target =
+      container?.querySelector<HTMLElement>(`#dock-${section}`) ??
+      document.getElementById(`dock-${section}`);
+    if (!target) return;
+
+    if (container && container.scrollHeight > container.clientHeight + 8) {
+      const containerRect = container.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const nextTop = container.scrollTop + (targetRect.top - containerRect.top) - 4;
+      container.scrollTo({
+        top: Math.max(0, nextTop),
+        behavior: 'smooth',
+      });
+    } else {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
   const [isBatchModalOpen, setIsBatchModalOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [gradeFilter, setGradeFilter] = useState('all');
@@ -380,6 +629,8 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
 
   const handleSelectSubmission = (subId: number) => {
     setSelectedSubmissionId(subId);
+    setSelectedEvidence(null);
+    setManualJumpLine(null);
     if (isDemoMode) {
       const sub = submissions.find((s) => s.id === subId);
       if (sub?.student_identifier === '1001' || subId === 1001) {
@@ -512,6 +763,8 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
         selectedSubmissionId
       );
       await loadSubmissionDetail();
+      setEvidenceCategory('codebert');
+      setSelectedEvidence(null);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Analysis failed. Please retry.');
     } finally {
@@ -547,6 +800,17 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
   const selectedSubmission = submissions.find((s) => s.id === selectedSubmissionId);
   const selectedAssignment = assignments.find((a) => a.id === selectedAssignmentId);
   const assignmentBase = `/courses/${selectedCourseId}/classes/${selectedClassId}/assignments/${selectedAssignmentId}`;
+
+  const codeHighlightData = useMemo(
+    () =>
+      deriveCodeHighlights(
+        submissionCode,
+        evidenceList,
+        evidenceCategory,
+        selectedEvidence
+      ),
+    [submissionCode, evidenceList, evidenceCategory, selectedEvidence]
+  );
 
   // Keyboard navigation helpers
   const handleSwitchTabByIndex = (index: number) => {
@@ -836,11 +1100,41 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
           const strokeOffset = circumference - (circumference * confirmedPercent) / 100;
 
           const stages = [
-            { id: 1, name: 'Setup', done: Boolean(selectedCourseId && selectedClassId), current: false },
-            { id: 2, name: 'Rubric', done: Boolean(rubric), current: false },
-            { id: 3, name: 'Ingest', done: totalSubmissions > 0, current: false },
-            { id: 4, name: 'Grade', done: submissions.some((s) => Boolean(s.grade)), current: false },
-            { id: 5, name: 'Confirm', done: totalSubmissions > 0 && confirmedSubmissions === totalSubmissions, current: false },
+            {
+              id: 1,
+              name: 'Setup',
+              done: Boolean(selectedCourseId && selectedClassId),
+              current: false,
+              action: () => handleTabChange('setup'),
+            },
+            {
+              id: 2,
+              name: 'Rubric',
+              done: Boolean(rubric),
+              current: false,
+              action: () => handleTabChange('rubric'),
+            },
+            {
+              id: 3,
+              name: 'Ingest',
+              done: totalSubmissions > 0,
+              current: false,
+              action: () => setIsBatchModalOpen(true),
+            },
+            {
+              id: 4,
+              name: 'Grade',
+              done: submissions.some((s) => Boolean(s.grade)),
+              current: false,
+              action: () => setGradeFilter('all'),
+            },
+            {
+              id: 5,
+              name: 'Confirm',
+              done: totalSubmissions > 0 && confirmedSubmissions === totalSubmissions,
+              current: false,
+              action: () => setGradeFilter('review'),
+            },
           ];
 
           let currentFound = false;
@@ -855,27 +1149,34 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
           }
 
           return (
-            <section aria-label="Assignment progress" className="mb-4 rounded-xl border border-[#AEAC78]/40 dark:border-[#AEAC78]/30 bg-[#FFFDF9] dark:bg-[#38322E] p-4 shadow-xs">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center space-x-2">
-                    <span className="relative flex h-2.5 w-2.5 shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#F2C46A] opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#F2C46A]" />
-                    </span>
-                    <h2 className="text-lg font-bold text-[#4C4541] dark:text-[#FCF0DA] text-balance truncate">
-                      {selectedAssignment.title}
-                    </h2>
+            <section aria-label="Assignment progress" className="mb-3 rounded-xl border border-[#AEAC78]/40 dark:border-[#AEAC78]/30 bg-[#FFFDF9] dark:bg-[#38322E] px-4 py-2.5 shadow-xs">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div className="flex-1 min-w-0 flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center space-x-2">
+                      <span className="relative flex h-2.5 w-2.5 shrink-0">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#F2C46A] opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#F2C46A]" />
+                      </span>
+                      <h2 className="text-base font-bold text-[#4C4541] dark:text-[#FCF0DA] text-balance truncate">
+                        {selectedAssignment.title}
+                      </h2>
+                    </div>
+                    <p className="mt-0.5 text-xs text-[#6B625B] dark:text-[#D8CEBA] text-pretty">
+                      Review test evidence, adjust scores if needed, then confirm each grade before exporting.
+                    </p>
                   </div>
-                  <p className="mt-1 text-xs text-[#6B625B] dark:text-[#D8CEBA] text-pretty">
-                    Review test evidence, adjust scores if needed, then confirm each grade before exporting.
-                  </p>
 
-                  {/* 5-Stage Lifecycle Indicator */}
-                  <div className="mt-3 flex items-center space-x-1 sm:space-x-2 overflow-x-auto pb-1">
+                  {/* Interactive 5-Stage Lifecycle Stepper */}
+                  <div className="flex items-center space-x-1 sm:space-x-1.5 overflow-x-auto py-0.5">
                     {stages.map((st, idx) => (
                       <React.Fragment key={st.id}>
-                        <div className="flex items-center space-x-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={st.action}
+                          className="flex items-center space-x-1.5 shrink-0 px-2 py-1 rounded-lg hover:bg-[#FCF0DA]/60 dark:hover:bg-[#2C2623] transition-colors cursor-pointer"
+                          title={`Jump to ${st.name} step`}
+                        >
                           <div
                             className={cn(
                               'w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold font-mono transition-all duration-200',
@@ -894,7 +1195,7 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                               st.done
                                 ? 'text-[#4C4541] dark:text-[#FCF0DA]'
                                 : st.current
-                                ? 'text-[#F2C46A] font-bold'
+                                ? 'text-[#4C4541] dark:text-[#F2C46A] font-bold'
                                 : 'text-[#AEAC78]'
                             )}
                           >
@@ -903,11 +1204,11 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                             )}
                             {st.name}
                           </span>
-                        </div>
+                        </button>
                         {idx < stages.length - 1 && (
                           <div
                             className={cn(
-                              'h-0.5 w-4 sm:w-6 shrink-0 transition-colors duration-200',
+                              'h-0.5 w-3 sm:w-5 shrink-0 transition-colors duration-200',
                               st.done ? 'bg-[#F2C46A]' : 'bg-[#AEAC78]/30'
                             )}
                           />
@@ -917,11 +1218,11 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-6 shrink-0 border-t lg:border-t-0 lg:border-l border-[#AEAC78]/30 pt-3 lg:pt-0 lg:pl-6">
+                <div className="flex items-center gap-5 shrink-0 border-t lg:border-t-0 lg:border-l border-[#AEAC78]/30 pt-2 lg:pt-0 lg:pl-5">
                   {/* Radial Confirmation Progress Meter */}
-                  <div className="flex items-center space-x-3 shrink-0">
-                    <div className="relative w-14 h-14 flex items-center justify-center">
-                      <svg className="w-14 h-14 transform -rotate-90" viewBox="0 0 60 60">
+                  <div className="flex items-center space-x-2.5 shrink-0">
+                    <div className="relative w-12 h-12 flex items-center justify-center">
+                      <svg className="w-12 h-12 transform -rotate-90" viewBox="0 0 60 60">
                         <circle
                           cx="30"
                           cy="30"
@@ -945,7 +1246,7 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                         />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                        <span className="text-[11px] font-black font-mono text-[#4C4541] dark:text-[#FCF0DA]">
+                        <span className="text-[10px] font-black font-mono text-[#4C4541] dark:text-[#FCF0DA]">
                           {confirmedPercent}%
                         </span>
                       </div>
@@ -961,10 +1262,10 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                   </div>
 
                   {/* Standard dl / dt / dd metrics preserved for Playwright selectors */}
-                  <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs tabular-nums">
+                  <dl className="flex flex-wrap gap-x-5 gap-y-1 text-xs tabular-nums">
                     <div>
                       <dt className="text-[#AEAC78]">Submissions</dt>
-                      <dd className="text-base font-bold text-[#4C4541] dark:text-[#FCF0DA]">{totalSubmissions}</dd>
+                      <dd className="text-sm font-bold text-[#4C4541] dark:text-[#FCF0DA]">{totalSubmissions}</dd>
                     </div>
                     <div>
                       <dt className="text-[#AEAC78] flex items-center gap-1.5">
@@ -976,7 +1277,7 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                         )}
                         <span>Awaiting review</span>
                       </dt>
-                      <dd className="text-base font-bold text-amber-600 dark:text-amber-400">
+                      <dd className="text-sm font-bold text-amber-600 dark:text-amber-400">
                         {awaitingReviewSubmissions}
                       </dd>
                     </div>
@@ -987,7 +1288,7 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                         )}
                         <span>Confirmed grades</span>
                       </dt>
-                      <dd className="text-base font-bold text-emerald-600 dark:text-emerald-400">
+                      <dd className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
                         {confirmedSubmissions}
                       </dd>
                     </div>
@@ -996,7 +1297,7 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
               </div>
 
               {!rubric && !loadingList && (
-                <p className="mt-3 text-xs text-[#AEAC78] border-t border-[#AEAC78]/20 pt-2">
+                <p className="mt-2 text-xs text-[#AEAC78] border-t border-[#AEAC78]/20 pt-2">
                   Set up a rubric before grading.{' '}
                   <button className="text-[#F2C46A] hover:underline font-bold cursor-pointer" onClick={() => handleTabChange('rubric')}>
                     Configure rubric
@@ -1078,6 +1379,7 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                 courseId={selectedCourseId!}
                 classId={selectedClassId!}
                 assignmentId={selectedAssignmentId!}
+                submissions={submissions}
                 onSelectSubmissions={(a, _b) => {
                   setSelectedSubmissionId(a);
                   setActiveTab('grading');
@@ -1089,23 +1391,31 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
 
         {activeTab === 'grading' && (
           <ErrorBoundary fallbackTitle="Error loading grading workspace">
-            <div className="flex-1 grid grid-cols-1 xl:grid-cols-12 gap-4 min-w-0">
-              {/* Left Submissions Roster Master List */}
-              <div className="xl:col-span-4 bg-[#FFFDF9] dark:bg-[#38322E] rounded-xl border border-[#AEAC78]/40 dark:border-[#AEAC78]/30 shadow-xs flex flex-col min-w-0 overflow-hidden">
-                <div className="p-3 border-b border-[#AEAC78]/30 dark:border-[#AEAC78]/20 bg-[#FCF0DA]/40 dark:bg-[#2C2623]/60 shrink-0">
+            <div
+              data-testid="grading-studio-grid"
+              className="grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[minmax(0,1fr)] gap-4 min-w-0 items-start lg:items-stretch lg:h-[calc(100dvh-195px)] lg:min-h-[650px] lg:max-h-[860px]"
+            >
+              {/* Column 1 (3/12): Cohort Submissions Roster */}
+              <div className="lg:col-span-3 lg:h-full bg-[#FFFDF9] dark:bg-[#38322E] rounded-2xl border border-[#AEAC78]/35 dark:border-[#AEAC78]/25 shadow-sm flex flex-col min-w-0 min-h-0 overflow-hidden">
+                <div className="p-3 border-b border-[#AEAC78]/25 dark:border-[#AEAC78]/20 bg-[#FCF0DA]/35 dark:bg-[#2C2623]/60 shrink-0">
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-bold text-[#4C4541] dark:text-[#FCF0DA] text-xs uppercase tracking-wider">
                       Cohort Submissions ({submissions.length})
                     </span>
-                    <button
-                      onClick={loadAssignmentData}
-                      className="text-[#AEAC78] hover:text-[#4C4541] dark:hover:text-[#F2C46A] p-1 cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95 disabled:hover:scale-100"
-                      title="Reload submissions"
-                      aria-label="Reload submissions"
-                      disabled={loadingList || !selectedAssignmentId}
-                    >
-                      <RefreshCw className={cn("w-3.5 h-3.5", loadingList && "animate-spin")} />
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <span className="hidden sm:inline-block font-mono text-[10px] px-1.5 py-0.5 rounded bg-[#FCF0DA] dark:bg-[#2C2623] text-[#4C4541] dark:text-[#FCF0DA] border border-[#AEAC78]/40">
+                        [K]/[J]
+                      </span>
+                      <button
+                        onClick={loadAssignmentData}
+                        className="text-[#AEAC78] hover:text-[#4C4541] dark:hover:text-[#F2C46A] p-1 cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95 disabled:hover:scale-100"
+                        title="Reload submissions"
+                        aria-label="Reload submissions"
+                        disabled={loadingList || !selectedAssignmentId}
+                      >
+                        <RefreshCw className={cn("w-3.5 h-3.5", loadingList && "animate-spin")} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="relative">
@@ -1116,14 +1426,39 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                       placeholder="Search student ID, name..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-8 pr-3 py-1.5 bg-[#FFFDF9] dark:bg-[#2C2623] border border-[#AEAC78]/60 rounded-lg text-xs placeholder-[#8F8782] text-[#4C4541] dark:text-[#FCF0DA] focus:outline-none focus:ring-2 focus:ring-[#F2C46A] transition-all duration-200"
+                      className="w-full pl-8 pr-3 py-1.5 bg-[#FFFDF9] dark:bg-[#2C2623] border border-[#AEAC78]/50 rounded-xl text-xs placeholder-[#8F8782] text-[#4C4541] dark:text-[#FCF0DA] focus:outline-none focus:ring-2 focus:ring-[#F2C46A] transition-all duration-200"
                     />
                   </div>
-                  <label className="mt-3 block text-xs font-medium text-[#6B625B] dark:text-[#D8CEBA]">
+
+                  {/* 1-Click Segmented Filter Pills synced with accessible <select> */}
+                  <div className="mt-2 grid grid-cols-4 gap-1">
+                    {[
+                      { id: 'all', label: 'All' },
+                      { id: 'review', label: 'Review' },
+                      { id: 'confirmed', label: 'Done' },
+                      { id: 'ungraded', label: 'New' },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setGradeFilter(tab.id)}
+                        className={cn(
+                          'py-1 px-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer border text-center truncate',
+                          gradeFilter === tab.id
+                            ? 'bg-[#F2C46A] text-[#4C4541] border-[#AEAC78]/60 shadow-2xs'
+                            : 'bg-[#FFFDF9] dark:bg-[#2C2623] text-[#6B625B] dark:text-[#D8CEBA] border-[#AEAC78]/35 hover:bg-[#FCF0DA]/60'
+                        )}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <label className="mt-2 block text-[11px] font-medium text-[#6B625B] dark:text-[#D8CEBA]">
                     Grade status
                     <select
                       aria-label="Filter by grade status"
-                      className="mt-1 w-full rounded-lg border border-[#AEAC78]/60 bg-[#FFFDF9] dark:bg-[#2C2623] p-2 text-xs text-[#4C4541] dark:text-[#FCF0DA] focus:outline-none focus:ring-2 focus:ring-[#F2C46A] transition-all duration-200"
+                      className="mt-1 w-full rounded-xl border border-[#AEAC78]/50 bg-[#FFFDF9] dark:bg-[#2C2623] p-1.5 text-xs text-[#4C4541] dark:text-[#FCF0DA] focus:outline-none focus:ring-2 focus:ring-[#F2C46A] transition-all duration-200"
                       value={gradeFilter}
                       onChange={(e) => setGradeFilter(e.target.value)}
                     >
@@ -1136,7 +1471,7 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                 </div>
 
                 {/* Roster List items */}
-                <div className="flex-1 max-h-96 xl:max-h-none overflow-y-auto divide-y divide-[#AEAC78]/20">
+                <div className="flex-1 min-h-0 max-h-96 lg:max-h-none overflow-y-auto divide-y divide-[#AEAC78]/15 p-1.5 space-y-1">
                   {loadingList ? (
                     <div className="text-center py-12 text-[#AEAC78] text-xs font-mono">
                       Loading submissions...
@@ -1203,9 +1538,9 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                           key={sub.id}
                           onClick={() => handleSelectSubmission(sub.id)}
                           className={cn(
-                            'w-full text-left p-3 cursor-pointer text-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md',
+                            'w-full text-left p-2.5 rounded-xl cursor-pointer text-sm transition-all duration-200',
                             isSelected
-                              ? 'bg-[#FCF0DA]/70 dark:bg-[#2C2623] border-l-4 border-[#F2C46A] ring-1 ring-[#F2C46A]/40 shadow-sm'
+                              ? 'bg-[#FCF0DA]/80 dark:bg-[#2C2623] border-l-4 border-[#F2C46A] ring-1 ring-[#F2C46A]/40 shadow-xs'
                               : 'hover:bg-[#FCF0DA]/35 dark:hover:bg-[#2C2623]/60 border-l-4 border-transparent'
                           )}
                         >
@@ -1224,7 +1559,7 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                               </div>
                             </div>
 
-                            <div className="text-right">
+                            <div className="text-right shrink-0">
                               {displayScore !== undefined && displayScore !== null ? (
                                 <span className="font-mono font-bold text-xs text-[#4C4541] dark:text-[#F2C46A]">
                                   {displayScore.toFixed(2)} pts
@@ -1252,67 +1587,298 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Right Pane: Split Detail Workstation */}
-              <div className="xl:col-span-8 flex flex-col gap-4 min-w-0">
-                {!selectedSubmissionId ? (
-                  <div className="p-4">
-                    <EmptyState
-                      title="Select a submission"
-                      description="Select a submission from the list to see its source, evidence and grade."
-                      icon={FileSearch}
-                    />
-                  </div>
-                ) : (
-                  <>
-                    <GradingJobPanel
-                      key={`${assignmentBase}/${selectedSubmissionId}`}
-                      base={assignmentBase}
-                      submissionId={selectedSubmissionId}
-                      onFinished={async () => {
-                        await loadSubmissionDetail();
-                        await loadAssignmentData();
-                      }}
-                    />
+              {!selectedSubmissionId ? (
+                <div className="lg:col-span-9 p-4">
+                  <EmptyState
+                    title="Select a submission"
+                    description="Select a submission from the list to see its source, evidence and grade."
+                    icon={FileSearch}
+                  />
+                </div>
+              ) : (
+                <>
+                  {/* Column 2 (5/12): Active Student Context + Source Code Studio + Sandbox Runner */}
+                  <div className="lg:col-span-5 lg:h-full flex flex-col gap-3 min-w-0 min-h-0 overflow-hidden">
+                    {/* Active Student Context Bar */}
+                    {(() => {
+                      const activeIndex = filteredSubmissions.findIndex((s) => s.id === selectedSubmissionId);
+                      const studentDisplayName =
+                        selectedSubmission?.student_name ||
+                        selectedSubmission?.student_identifier ||
+                        `Submission #${selectedSubmissionId}`;
+                      const avatarInitial = studentDisplayName.trim().charAt(0).toUpperCase() || 'S';
 
-                    {/* Top Row: Source Code Viewer & Evidence Inspector */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 min-w-0">
-                      {/* Code Viewer */}
-                      <div data-testid="code-viewer" className="h-96 min-w-0 overflow-hidden flex flex-col">
-                        <div className="flex items-center justify-between pb-1.5 text-xs text-[#AEAC78]">
-                          <div className="flex items-center space-x-1.5">
-                            <span className="font-semibold text-[#4C4541] dark:text-[#FCF0DA]">Source:</span>
-                            <code className="bg-[#FCF0DA]/30 dark:bg-[#2C2623] text-[#4C4541] dark:text-[#FCF0DA] px-1.5 py-0.5 rounded font-mono border border-[#AEAC78]/30">
-                              {selectedSubmission?.original_filename || 'solution.py'}
-                            </code>
+                      const passedTests = evidenceList.filter((e) => e.source === 'pytest' && e.rule_code === 'TEST_PASSED').length;
+                      const totalTests = evidenceList.filter((e) => e.source === 'pytest').length;
+                      const ruffCount = evidenceList.filter((e) => e.source === 'ruff').length;
+                      const astCount = evidenceList.filter((e) => e.source === 'ast').length;
+                      const jplagItem = evidenceList.find((e) => e.source === 'jplag');
+                      const codebertItem = evidenceList.find((e) => e.source === 'codebert');
+
+                      return (
+                        <div className="bg-[#FFFDF9] dark:bg-[#38322E] rounded-2xl border border-[#AEAC78]/35 dark:border-[#AEAC78]/25 px-3.5 py-2.5 shadow-sm flex flex-col gap-2 shrink-0">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-8 h-8 rounded-xl bg-[#FCF0DA] dark:bg-[#2C2623] border border-[#AEAC78]/50 flex items-center justify-center font-bold text-xs text-[#4C4541] dark:text-[#F2C46A] shrink-0">
+                                {avatarInitial}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-bold text-sm text-[#4C4541] dark:text-[#FCF0DA] truncate">
+                                    {studentDisplayName}
+                                  </span>
+                                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-[#FCF0DA]/60 dark:bg-[#2C2623] text-[#4C4541] dark:text-[#FCF0DA] border border-[#AEAC78]/35">
+                                    ID: {selectedSubmission?.student_identifier || selectedSubmissionId}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-[#6B625B] dark:text-[#AEAC78] font-mono truncate">
+                                  Source: <code>{selectedSubmission?.original_filename || 'solution.py'}</code>
+                                  {activeIndex !== -1 && (
+                                    <span>
+                                      {' '}• {activeIndex + 1}/{filteredSubmissions.length}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Prev [K] / Next [J] Student Navigation Controls */}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={handlePrevSubmission}
+                                disabled={activeIndex <= 0}
+                                className="px-2 py-1 rounded-lg border border-[#AEAC78]/50 bg-[#FCF0DA]/50 dark:bg-[#2C2623] hover:bg-[#FCF0DA] text-[#4C4541] dark:text-[#FCF0DA] text-[11px] font-mono font-bold inline-flex items-center gap-0.5 cursor-pointer disabled:opacity-40"
+                                title="Previous submission (Shortcut: K)"
+                              >
+                                <ChevronLeft className="w-3.5 h-3.5" />
+                                <span>Prev [K]</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleNextSubmission}
+                                disabled={activeIndex === -1 || activeIndex >= filteredSubmissions.length - 1}
+                                className="px-2 py-1 rounded-lg border border-[#AEAC78]/50 bg-[#FCF0DA]/50 dark:bg-[#2C2623] hover:bg-[#FCF0DA] text-[#4C4541] dark:text-[#FCF0DA] text-[11px] font-mono font-bold inline-flex items-center gap-0.5 cursor-pointer disabled:opacity-40"
+                                title="Next submission (Shortcut: J)"
+                              >
+                                <span>Next [J]</span>
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
-                          <span className="text-[#AEAC78] font-mono text-[11px]">
-                            Student ID: <code>{selectedSubmission?.student_identifier || selectedSubmissionId}</code>
-                          </span>
+
+                          {/* Quick Signal Pills (Click to Markpen Code) */}
+                          <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                            {totalTests > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEvidenceCategory((prev) => (prev === 'pytest' ? 'all' : 'pytest'));
+                                  setSelectedEvidence(null);
+                                }}
+                                className={cn(
+                                  'px-2 py-0.5 rounded-lg font-bold inline-flex items-center gap-1 transition-all cursor-pointer border',
+                                  evidenceCategory === 'pytest'
+                                    ? 'bg-[#4C4541] text-[#FCF0DA] border-[#4C4541] shadow-xs'
+                                    : 'bg-[#FCF0DA]/40 dark:bg-[#2C2623] text-[#4C4541] dark:text-[#FCF0DA] border-[#AEAC78]/40 hover:bg-[#FCF0DA]'
+                                )}
+                                title="Click to highlight tested functions in code"
+                              >
+                                <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                <span>Tests {passedTests}/{totalTests}</span>
+                              </button>
+                            )}
+                            {ruffCount > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEvidenceCategory((prev) => (prev === 'ruff' ? 'all' : 'ruff'));
+                                  setSelectedEvidence(null);
+                                }}
+                                className={cn(
+                                  'px-2 py-0.5 rounded-lg font-bold inline-flex items-center gap-1 transition-all cursor-pointer border',
+                                  evidenceCategory === 'ruff'
+                                    ? 'bg-[#4C4541] text-[#FCF0DA] border-[#4C4541] shadow-xs'
+                                    : 'bg-[#F2C46A]/20 text-[#6B4307] dark:text-[#F2C46A] border-[#F2C46A]/50 hover:bg-[#F2C46A]/35'
+                                )}
+                                title="Click to mark Ruff linter lines in code"
+                              >
+                                <AlertTriangle className="w-3 h-3 text-[#F2C46A]" />
+                                <span>Ruff ({ruffCount})</span>
+                              </button>
+                            )}
+                            {astCount > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEvidenceCategory((prev) => (prev === 'ast' ? 'all' : 'ast'));
+                                  setSelectedEvidence(null);
+                                }}
+                                className={cn(
+                                  'px-2 py-0.5 rounded-lg font-bold inline-flex items-center gap-1 transition-all cursor-pointer border',
+                                  evidenceCategory === 'ast'
+                                    ? 'bg-[#4C4541] text-[#FCF0DA] border-[#4C4541] shadow-xs'
+                                    : 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-400/50 hover:bg-amber-500/25'
+                                )}
+                                title="Click to mark AST complexity blocks in code"
+                              >
+                                <Cpu className="w-3 h-3" />
+                                <span>Complexity ({astCount})</span>
+                              </button>
+                            )}
+                            {jplagItem && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEvidenceCategory((prev) => (prev === 'jplag' ? 'all' : 'jplag'));
+                                  setSelectedEvidence(null);
+                                }}
+                                className={cn(
+                                  'px-2 py-0.5 rounded-lg font-bold inline-flex items-center gap-1 transition-all cursor-pointer border',
+                                  evidenceCategory === 'jplag'
+                                    ? 'bg-[#4C4541] text-[#FCF0DA] border-[#4C4541] shadow-xs'
+                                    : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/50 hover:bg-rose-500/25'
+                                )}
+                                title="Click to mark similarity regions in code"
+                              >
+                                <ShieldAlert className="w-3 h-3" />
+                                <span>Similarity {Math.round(jplagItem.metric_value || 0)}%</span>
+                              </button>
+                            )}
+                            {codebertItem && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEvidenceCategory((prev) => (prev === 'codebert' ? 'all' : 'codebert'));
+                                  setSelectedEvidence(null);
+                                }}
+                                className={cn(
+                                  'px-2 py-0.5 rounded-lg font-bold inline-flex items-center gap-1 transition-all cursor-pointer border',
+                                  evidenceCategory === 'codebert'
+                                    ? 'bg-[#4C4541] text-[#FCF0DA] border-[#4C4541] shadow-xs'
+                                    : 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-400/50 hover:bg-violet-500/25'
+                                )}
+                                title="Click to mark AI stylistic regions in code"
+                              >
+                                <Bot className="w-3 h-3" />
+                                <span>AI Style {Math.round((codebertItem.metric_value || 0) * 100)}%</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        {loadingDetail ? (
-                          <div className="flex-1 bg-[#2C2623] rounded-xl border border-[#AEAC78]/40 flex items-center justify-center text-[#AEAC78] text-xs font-mono">
-                            Loading submission artifacts...
-                          </div>
-                        ) : (
-                          <div className="flex-1 min-h-0">
-                            <CodeViewer
-                              code={submissionCode}
-                              filename={selectedSubmission?.original_filename || 'solution.py'}
-                            />
-                          </div>
-                        )}
-                      </div>
+                      );
+                    })()}
 
-                      {/* Evidence Inspector */}
-                      <div data-testid="evidence-inspector" className="h-96 min-w-0 overflow-hidden">
-                        <EvidenceInspector evidence={evidenceList} />
-                      </div>
+                    {/* Source Code Viewer (Front-and-Center in Column 2, fills remaining height) */}
+                    <div
+                      data-testid="code-viewer"
+                      className="flex-1 min-h-[420px] lg:min-h-0 min-w-0 overflow-hidden flex flex-col"
+                    >
+                      {loadingDetail ? (
+                        <div className="flex-1 bg-[#241F1C] rounded-2xl border border-[#AEAC78]/35 flex items-center justify-center text-[#AEAC78] text-xs font-mono">
+                          Loading submission artifacts...
+                        </div>
+                      ) : (
+                        <div className="flex-1 min-h-0">
+                          <CodeViewer
+                            code={submissionCode}
+                            filename={selectedSubmission?.original_filename || 'solution.py'}
+                            highlightedLines={manualJumpLine ? [manualJumpLine] : []}
+                            lineHighlights={codeHighlightData.highlights}
+                            activeHighlightSummary={codeHighlightData.summary}
+                            onClearHighlight={() => {
+                              setSelectedEvidence(null);
+                              setEvidenceCategory('all');
+                              setManualJumpLine(null);
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
 
-                    {/* Bottom Row: Deterministic Grade Overrides & AI Feedback Draft */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 min-w-0">
+                    {/* Sandbox Grading Job Runner (Pinned at bottom of Column 2) */}
+                    <div className="shrink-0">
+                      <GradingJobPanel
+                        key={`${assignmentBase}/${selectedSubmissionId}`}
+                        base={assignmentBase}
+                        submissionId={selectedSubmissionId}
+                        onFinished={async () => {
+                          await loadSubmissionDetail();
+                          await loadAssignmentData();
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Column 3 (4/12): Quick-Jump Dock Bar + Independent Scrollable Inspector Stack */}
+                  <div className="lg:col-span-4 lg:h-full flex flex-col gap-2.5 min-w-0 min-h-0 overflow-hidden">
+                    {/* Quick-Jump Inspector Dock Bar */}
+                    <div
+                      data-testid="inspector-dock-bar"
+                      className="shrink-0 bg-[#FFFDF9] dark:bg-[#38322E] rounded-xl border border-[#AEAC78]/35 dark:border-[#AEAC78]/25 p-1 shadow-xs grid grid-cols-3 gap-1"
+                    >
+                      {[
+                        { id: 'evidence' as const, label: `1. Evidence (${evidenceList.length})` },
+                        { id: 'rubric' as const, label: '2. Rubric & Score' },
+                        { id: 'feedback' as const, label: '3. AI Feedback' },
+                      ].map((tab) => (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => scrollToDockSection(tab.id)}
+                          className={cn(
+                            'py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all cursor-pointer truncate text-center',
+                            activeDockSection === tab.id
+                              ? 'bg-[#4C4541] text-[#FCF0DA] dark:bg-[#F2C46A] dark:text-[#4C4541] shadow-2xs'
+                              : 'text-[#6B625B] dark:text-[#D8CEBA] hover:bg-[#FCF0DA]/60 dark:hover:bg-[#2C2623]'
+                          )}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Independent Scrollable Inspector Stack */}
+                    <div
+                      ref={col3ScrollRef}
+                      data-testid="inspector-scroll-pane"
+                      onScroll={(e) => {
+                        if (Date.now() < programmaticScrollUntilRef.current) return;
+                        const container = e.currentTarget;
+                        const containerTop = container.getBoundingClientRect().top;
+                        const rubricEl = container.querySelector<HTMLElement>('#dock-rubric');
+                        const feedbackEl = container.querySelector<HTMLElement>('#dock-feedback');
+                        if (feedbackEl && feedbackEl.getBoundingClientRect().top - containerTop <= 140) {
+                          setActiveDockSection('feedback');
+                        } else if (rubricEl && rubricEl.getBoundingClientRect().top - containerTop <= 140) {
+                          setActiveDockSection('rubric');
+                        } else {
+                          setActiveDockSection('evidence');
+                        }
+                      }}
+                      className="flex-1 min-h-0 lg:overflow-y-auto space-y-3 pr-1 pb-56 relative"
+                    >
+                      {/* Evidence Inspector */}
+                      <div
+                        id="dock-evidence"
+                        data-testid="evidence-inspector"
+                        className="h-[340px] min-w-0 overflow-hidden"
+                      >
+                        <EvidenceInspector
+                          evidence={evidenceList}
+                          activeCategory={evidenceCategory}
+                          onCategoryChange={setEvidenceCategory}
+                          selectedEvidenceId={selectedEvidence?.id || null}
+                          onSelectEvidence={(ev) => {
+                            setSelectedEvidence(ev);
+                            setManualJumpLine(null);
+                          }}
+                          onSelectLine={(line) => setManualJumpLine(line)}
+                        />
+                      </div>
+
                       {/* Grade Override Panel */}
-                      <div className="min-w-0">
+                      <div id="dock-rubric" className="min-w-0">
                         <GradeOverridePanel
                           key={selectedSubmissionId}
                           grade={submissionGrade}
@@ -1322,22 +1888,29 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                       </div>
 
                       {/* AI Feedback Draft Editor */}
-                      <div data-testid="feedback-draft-editor" className="min-w-0 min-h-96">
-                        <div className="flex items-center justify-between mb-1 text-[11px] font-bold text-[#4C4541] dark:text-[#FCF0DA] px-1">
-                          <span>AI Feedback Draft & Suggestions</span>
-                          <span className="text-[#AEAC78] font-mono text-[10px]">Human-in-the-Loop Review</span>
-                        </div>
+                      <div
+                        id="dock-feedback"
+                        data-testid="feedback-draft-editor"
+                        className="min-w-0 min-h-[380px]"
+                      >
                         <FeedbackDraftEditor
                           key={selectedSubmissionId}
                           grade={submissionGrade}
                           onGenerate={handleGenerateFeedback}
                           onSaveFeedback={handleSaveFeedback}
+                          onSelectEvidence={(evidenceId) => {
+                            const found = evidenceList.find((e) => e.id === evidenceId);
+                            if (found) {
+                              setSelectedEvidence(found);
+                              setManualJumpLine(null);
+                            }
+                          }}
                         />
                       </div>
                     </div>
-                  </>
-                )}
-              </div>
+                  </div>
+                </>
+              )}
             </div>
           </ErrorBoundary>
         )}
