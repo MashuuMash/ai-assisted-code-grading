@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -235,7 +235,7 @@ def main() -> None:
 
         stages = asyncio.run(run_suite())
         payload = {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "target": args.label.strip() or (base_url if args.base_url else "self-contained-uvicorn-single-worker"),
             "stages": stages,
         }
