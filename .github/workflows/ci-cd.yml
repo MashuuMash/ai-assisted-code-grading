@@ -64,13 +64,13 @@ jobs:
     name: Deploy to Azure VM
     needs: ci
     runs-on: ubuntu-latest
-    if: >-
-      (github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main')) &&
-      secrets.VPS_HOST != ''
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
 
     steps:
       - name: Deploy via SSH to Azure VM
+        env:
+          VPS_HOST_CHECK: ${{ secrets.VPS_HOST }}
+        if: env.VPS_HOST_CHECK != ''
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -93,5 +93,11 @@ jobs:
             docker compose up -d --build
             docker update --restart unless-stopped $(docker compose ps -q postgres backend worker)
 
-            sleep 5
-            curl -fsS http://127.0.0.1:8000/health
+            for i in $(seq 1 12); do
+              if curl -fsS http://127.0.0.1:8000/health; then
+                exit 0
+              fi
+              sleep 5
+            done
+            echo "Backend health check failed after 60s" >&2
+            exit 1
