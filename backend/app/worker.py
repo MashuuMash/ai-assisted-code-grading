@@ -1,5 +1,5 @@
 import logging
-import time
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
@@ -21,6 +21,7 @@ from app.models import (
     TestOutcome,
     TestResult,
 )
+from app.redis_client import wait_for_grading_job
 from app.rubric_engine import evaluate_submission_grade
 from app.sandbox_runner import DockerSandboxRunner
 from app.static_analysis import StaticAnalyzer
@@ -180,32 +181,62 @@ def process_job(
     _execute_with_db(db, _process)
 
 
+def _run_claimed_job(job_id: int) -> None:
+    try:
+        process_job(job_id)
+    except Exception:
+        logger.exception("Unexpected grading worker failure for job %s", job_id)
+        with SessionLocal() as db:
+            job = db.get(GradingJob, job_id)
+            if job and job.status == GradingJobStatus.RUNNING:
+                transition_job(job, GradingJobStatus.FAILED)
+                job.failure_type = "infrastructure_error"
+                job.failure_information = "Unexpected worker failure"
+                db.commit()
+
+
 def main() -> None:
-    _ = get_settings()
+    settings = get_settings()
+    concurrency = max(1, settings.worker_concurrency)
     recovered = recover_interrupted_jobs()
     orphans = cleanup_orphan_sandbox_volumes()
-    logger.info("Grading worker started")
+    logger.info("Grading worker started (concurrency=%s)", concurrency)
     if recovered:
         logger.warning("Marked %s interrupted grading jobs as failed", recovered)
     if orphans:
         logger.info("Removed %s dangling sandbox volumes", orphans)
 
-    while True:
-        job_id = claim_job()
-        if job_id is None:
-            time.sleep(2)
-            continue
-        try:
-            process_job(job_id)
-        except Exception:
-            logger.exception("Unexpected grading worker failure for job %s", job_id)
-            with SessionLocal() as db:
-                job = db.get(GradingJob, job_id)
-                if job and job.status == GradingJobStatus.RUNNING:
-                    transition_job(job, GradingJobStatus.FAILED)
-                    job.failure_type = "infrastructure_error"
-                    job.failure_information = "Unexpected worker failure"
-                    db.commit()
+    if concurrency == 1:
+        while True:
+            job_id = claim_job()
+            if job_id is None:
+                wait_for_grading_job(timeout_seconds=2.0)
+                continue
+            _run_claimed_job(job_id)
+
+    in_flight: set[Future] = set()
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        while True:
+            done_now = {fut for fut in in_flight if fut.done()}
+            for fut in done_now:
+                in_flight.remove(fut)
+                try:
+                    fut.result()
+                except Exception:
+                    logger.exception("Unhandled exception in worker pool thread")
+
+            while len(in_flight) < concurrency:
+                job_id = claim_job()
+                if job_id is None:
+                    break
+                in_flight.add(pool.submit(_run_claimed_job, job_id))
+
+            if len(in_flight) >= concurrency:
+                wait(in_flight, timeout=2.0, return_when=FIRST_COMPLETED)
+            elif in_flight:
+                wait(in_flight, timeout=0.5, return_when=FIRST_COMPLETED)
+            else:
+                wait_for_grading_job(timeout_seconds=2.0)
 
 
 if __name__ == "__main__":

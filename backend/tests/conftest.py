@@ -10,6 +10,8 @@ from app.auth import create_access_token, get_password_hash
 from app.database import Base, get_db
 from app.main import app
 from app.models import User, UserRole
+from app.rate_limit import reset_rate_limiter
+from app.redis_client import reset_redis_client
 
 TEST_DATABASE_URL = "sqlite:///:memory:"
 
@@ -23,9 +25,13 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 @pytest.fixture(autouse=True)
 def init_database() -> Generator[None, None, None]:
+    reset_rate_limiter()
+    reset_redis_client()
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+    reset_rate_limiter()
+    reset_redis_client()
 
 
 @pytest.fixture

@@ -45,6 +45,7 @@ from app.models import (
     UserRole,
     utc_now,
 )
+from app.redis_client import bump_cache_version
 from app.submission_storage import SubmissionStorage
 
 
@@ -1415,7 +1416,9 @@ def seed_demo(
     db: Annotated[Session, Depends(get_db)] = None,
 ) -> DemoSeedResponse:
     """Publicly accessible idempotent endpoint to seed demo environment."""
-    return seed_demo_environment(db, reset=reset)
+    res = seed_demo_environment(db, reset=reset)
+    bump_cache_version("courses")
+    return res
 
 
 @router.post("/reset", response_model=DemoResetResponse)
@@ -1424,6 +1427,7 @@ def reset_demo(
 ) -> DemoResetResponse:
     """Reset demo course and submissions back to initial baseline."""
     seed_demo_environment(db, reset=True)
+    bump_cache_version("courses")
     return DemoResetResponse(
         status="success",
         message="Demo environment reset to baseline.",

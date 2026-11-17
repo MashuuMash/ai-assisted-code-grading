@@ -66,6 +66,16 @@ class Settings(BaseSettings):
     smtp_from_name: str = "VeriPie Instructor Workstation"
     support_email: str = ""
     otp_expire_minutes: int = 10
+    rate_limit_enabled: bool = True
+
+    redis_url: str = ""
+    uvicorn_workers: int = 2
+    db_pool_size: int = 10
+    db_max_overflow: int = 20
+    db_pool_recycle: int = 1800
+    worker_concurrency: int = 1
+    feedback_batch_concurrency: int = 4
+    cache_ttl_seconds: int = 30
 
 
 @lru_cache

@@ -7,11 +7,14 @@ import time
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
+from app.config import get_settings
 from app.database import engine
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
+    settings = get_settings()
+    workers = max(1, settings.uvicorn_workers)
     for attempt in range(60):
         try:
             with engine.connect() as connection:
@@ -24,7 +27,10 @@ def main() -> None:
             time.sleep(2)
     engine.dispose()
     subprocess.run(["alembic", "upgrade", "head"], check=True)
-    os.execvp("uvicorn", ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"])
+    cmd = ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    if workers > 1:
+        cmd.extend(["--workers", str(workers)])
+    os.execvp("uvicorn", cmd)
 
 
 if __name__ == "__main__":

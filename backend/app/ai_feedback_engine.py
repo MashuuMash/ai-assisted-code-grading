@@ -1,6 +1,8 @@
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -366,14 +368,28 @@ def format_feedback_to_markdown(feedback: DetailedFeedbackPayload) -> str:
     return "\n".join(lines)
 
 
-def generate_feedback_for_submission(
+@dataclass(frozen=True)
+class _PreparedFeedbackTask:
+    submission_id: int
+    rubric_id: int
+    model: str
+    context: dict[str, Any]
+    valid_evidence_keys: dict[str, bool]
+
+
+@dataclass(frozen=True)
+class _SynthesizedFeedbackResult:
+    payload: DetailedFeedbackPayload
+    markdown_summary: str
+    feedback_source: str
+
+
+def _prepare_feedback_task(
     submission_id: int,
     db: Session,
     model_override: str | None = None,
-) -> SubmissionGrade:
-    """Generate evidence-grounded feedback draft for a submission and persist to SubmissionGrade."""
+) -> _PreparedFeedbackTask:
     settings = get_settings()
-
     submission = db.scalar(
         select(Submission)
         .options(selectinload(Submission.assignment))
@@ -395,14 +411,13 @@ def generate_feedback_for_submission(
         .order_by(SubmissionEvidence.created_at)
     ).all()
 
-    valid_evidence_map = {ev.id: ev for ev in evidence_records}
+    valid_evidence_keys = {ev.id: True for ev in evidence_records}
 
-    # Ensure grade record exists
     submission_grade = db.scalar(
         select(SubmissionGrade).where(SubmissionGrade.submission_id == submission_id)
     )
     if not submission_grade and rubric:
-        submission_grade = evaluate_submission_grade(db, submission_id)
+        evaluate_submission_grade(db, submission_id)
 
     source_code = ""
     if submission.storage_key:
@@ -413,6 +428,10 @@ def generate_feedback_for_submission(
         except Exception:
             source_code = ""
 
+    raw_model = model_override or settings.ai_model
+    if not re.match(r"^[a-zA-Z0-9._-]+$", raw_model):
+        raise ValueError(f"Invalid AI model name format: {raw_model}")
+
     context = build_evidence_context(
         submission=submission,
         assignment=assignment,
@@ -420,25 +439,32 @@ def generate_feedback_for_submission(
         evidence_records=list(evidence_records),
         source_code=source_code,
     )
+    return _PreparedFeedbackTask(
+        submission_id=submission_id,
+        rubric_id=rubric.id if rubric else 1,
+        model=raw_model,
+        context=context,
+        valid_evidence_keys=valid_evidence_keys,
+    )
 
+
+def _synthesize_feedback_payload(task: _PreparedFeedbackTask) -> _SynthesizedFeedbackResult:
+    """Run LLM synthesis or deterministic fallback without touching DB sessions."""
+    settings = get_settings()
     user_prompt = (
         "Here is the structured evidence for the student submission:\n"
-        f"```json\n{json.dumps(context, indent=2)}\n```\n\n"
+        f"```json\n{json.dumps(task.context, indent=2)}\n```\n\n"
         "Generate the structured evidence-grounded feedback draft according to the required schema."
     )
 
     provider = settings.ai_provider.lower()
-    raw_model = model_override or settings.ai_model
-    if not re.match(r"^[a-zA-Z0-9._-]+$", raw_model):
-        raise ValueError(f"Invalid AI model name format: {raw_model}")
-    model = raw_model
     feedback_payload: DetailedFeedbackPayload | None = None
     feedback_source = "rules"
 
     if provider == "gemini" and settings.gemini_api_key:
         try:
-            raw_dict = _call_gemini_api(user_prompt, settings.gemini_api_key, model)
-            feedback_payload = _validate_and_sanitize_feedback(raw_dict, valid_evidence_map)
+            raw_dict = _call_gemini_api(user_prompt, settings.gemini_api_key, task.model)
+            feedback_payload = _validate_and_sanitize_feedback(raw_dict, task.valid_evidence_keys)
             feedback_source = "gemini"
         except Exception as ex:
             logger.warning("Gemini API call failed (%s); falling back to mock provider", ex)
@@ -449,42 +475,124 @@ def generate_feedback_for_submission(
                 user_prompt,
                 settings.openai_api_key,
                 settings.openai_base_url,
-                model,
+                task.model,
             )
-            feedback_payload = _validate_and_sanitize_feedback(raw_dict, valid_evidence_map)
+            feedback_payload = _validate_and_sanitize_feedback(raw_dict, task.valid_evidence_keys)
             feedback_source = "openai"
         except Exception as ex:
             logger.warning("OpenAI API call failed (%s); falling back to mock provider", ex)
 
-    # Fallback to mock generator
     if feedback_payload is None:
-        feedback_payload = generate_mock_feedback(context, valid_evidence_map)
+        feedback_payload = generate_mock_feedback(task.context, task.valid_evidence_keys)
 
-    markdown_summary = format_feedback_to_markdown(feedback_payload)
+    return _SynthesizedFeedbackResult(
+        payload=feedback_payload,
+        markdown_summary=format_feedback_to_markdown(feedback_payload),
+        feedback_source=feedback_source,
+    )
 
-    # Persist feedback to SubmissionGrade
+
+def _apply_feedback_result(
+    db: Session,
+    task: _PreparedFeedbackTask,
+    synth: _SynthesizedFeedbackResult,
+    *,
+    commit: bool = True,
+) -> SubmissionGrade:
+    submission_grade = db.scalar(
+        select(SubmissionGrade).where(SubmissionGrade.submission_id == task.submission_id)
+    )
     if submission_grade:
-        submission_grade.feedback_summary = markdown_summary
-        submission_grade.detailed_feedback = feedback_payload.model_dump()
-        submission_grade.feedback_source = feedback_source
+        submission_grade.feedback_summary = synth.markdown_summary
+        submission_grade.detailed_feedback = synth.payload.model_dump()
+        submission_grade.feedback_source = synth.feedback_source
         if submission_grade.status == GradeStatus.PENDING:
             submission_grade.status = GradeStatus.DRAFT
     else:
-        # If no rubric was configured, create a standalone draft grade
         submission_grade = SubmissionGrade(
-            submission_id=submission_id,
-            rubric_id=rubric.id if rubric else 1,
+            submission_id=task.submission_id,
+            rubric_id=task.rubric_id,
             suggested_total_score=0.0,
             status=GradeStatus.DRAFT,
-            feedback_summary=markdown_summary,
-            detailed_feedback=feedback_payload.model_dump(),
-            feedback_source=feedback_source,
+            feedback_summary=synth.markdown_summary,
+            detailed_feedback=synth.payload.model_dump(),
+            feedback_source=synth.feedback_source,
         )
         db.add(submission_grade)
 
-    db.commit()
-    db.refresh(submission_grade)
+    if commit:
+        db.commit()
+        db.refresh(submission_grade)
     return submission_grade
+
+
+def generate_feedback_for_submission(
+    submission_id: int,
+    db: Session,
+    model_override: str | None = None,
+) -> SubmissionGrade:
+    """Generate evidence-grounded feedback draft for a submission and persist to SubmissionGrade."""
+    task = _prepare_feedback_task(submission_id, db, model_override=model_override)
+    synth = _synthesize_feedback_payload(task)
+    return _apply_feedback_result(db, task, synth, commit=True)
+
+
+def generate_batch_feedback_for_submissions(
+    submission_ids: list[int],
+    db: Session,
+    model_override: str | None = None,
+    max_workers: int | None = None,
+) -> dict[int, tuple[SubmissionGrade | None, Exception | None]]:
+    """Synthesize feedback for multiple submissions concurrently, keeping DB writes on main session."""
+    outcomes: dict[int, tuple[SubmissionGrade | None, Exception | None]] = {}
+    prepared_tasks: list[_PreparedFeedbackTask] = []
+
+    for sub_id in submission_ids:
+        try:
+            prepared_tasks.append(_prepare_feedback_task(sub_id, db, model_override=model_override))
+        except Exception as exc:
+            outcomes[sub_id] = (None, exc)
+
+    if not prepared_tasks:
+        return outcomes
+
+    concurrency = max(1, max_workers if max_workers is not None else get_settings().feedback_batch_concurrency)
+    synthesized: dict[int, tuple[_SynthesizedFeedbackResult | None, Exception | None]] = {}
+
+    if concurrency == 1 or len(prepared_tasks) == 1:
+        for task in prepared_tasks:
+            try:
+                synthesized[task.submission_id] = (_synthesize_feedback_payload(task), None)
+            except Exception as exc:
+                synthesized[task.submission_id] = (None, exc)
+    else:
+        with ThreadPoolExecutor(max_workers=min(concurrency, len(prepared_tasks))) as pool:
+            future_map = {pool.submit(_synthesize_feedback_payload, t): t for t in prepared_tasks}
+            for fut, task in future_map.items():
+                try:
+                    synthesized[task.submission_id] = (fut.result(), None)
+                except Exception as exc:
+                    synthesized[task.submission_id] = (None, exc)
+
+    persisted: list[tuple[int, SubmissionGrade]] = []
+    for task in prepared_tasks:
+        synth, err = synthesized[task.submission_id]
+        if err is not None or synth is None:
+            outcomes[task.submission_id] = (None, err or RuntimeError("Synthesis failed"))
+            continue
+        try:
+            grade = _apply_feedback_result(db, task, synth, commit=False)
+            persisted.append((task.submission_id, grade))
+        except Exception as exc:
+            outcomes[task.submission_id] = (None, exc)
+
+    if persisted:
+        db.commit()
+        for sub_id, grade in persisted:
+            db.refresh(grade)
+            outcomes[sub_id] = (grade, None)
+
+    return outcomes
 
 
 def _validate_and_sanitize_feedback(

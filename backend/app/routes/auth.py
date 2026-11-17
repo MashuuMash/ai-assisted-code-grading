@@ -11,6 +11,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.email_service import generate_otp_code, hash_otp_code, send_otp_email, verify_otp_code
 from app.models import User, UserRole, utc_now
+from app.rate_limit import rate_limit
 from app.schemas import (
     ChangePasswordRequest,
     ChangePasswordResponse,
@@ -52,7 +53,12 @@ def _mask_email(email: str) -> str:
     return f"{masked_local}@{domain}"
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit("auth_register", max_requests=15, window_seconds=60))],
+)
 def register(user_in: UserRegister, db: Annotated[Session, Depends(get_db)]) -> UserResponse:
     settings = get_settings()
     existing_users = list(
@@ -128,7 +134,11 @@ def register(user_in: UserRegister, db: Annotated[Session, Depends(get_db)]) -> 
     )
 
 
-@router.post("/verify-otp", response_model=Token)
+@router.post(
+    "/verify-otp",
+    response_model=Token,
+    dependencies=[Depends(rate_limit("auth_otp", max_requests=15, window_seconds=60))],
+)
 def verify_otp(
     payload: OtpVerifyRequest,
     db: Annotated[Session, Depends(get_db)],
@@ -185,7 +195,11 @@ def verify_otp(
     return Token(access_token=token, token_type="bearer")
 
 
-@router.post("/resend-otp", response_model=OtpResendResponse)
+@router.post(
+    "/resend-otp",
+    response_model=OtpResendResponse,
+    dependencies=[Depends(rate_limit("auth_otp", max_requests=15, window_seconds=60))],
+)
 def resend_otp(
     payload: OtpResendRequest,
     db: Annotated[Session, Depends(get_db)],
@@ -247,7 +261,11 @@ def _inactive_account_detail() -> str:
     return f"Account is deactivated. Please contact {contact} to reactivate your account."
 
 
-@router.post("/login", response_model=Token)
+@router.post(
+    "/login",
+    response_model=Token,
+    dependencies=[Depends(rate_limit("auth_login", max_requests=20, window_seconds=60))],
+)
 def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Annotated[Session, Depends(get_db)],
@@ -279,7 +297,11 @@ def login(
     return Token(access_token=token, token_type="bearer")
 
 
-@router.post("/login/json", response_model=Token)
+@router.post(
+    "/login/json",
+    response_model=Token,
+    dependencies=[Depends(rate_limit("auth_login", max_requests=20, window_seconds=60))],
+)
 def login_json(
     credentials: UserLogin,
     db: Annotated[Session, Depends(get_db)],
@@ -356,7 +378,11 @@ def change_password(
     return ChangePasswordResponse(message="Password changed successfully")
 
 
-@router.post("/forgot-password", response_model=ForgotPasswordResponse)
+@router.post(
+    "/forgot-password",
+    response_model=ForgotPasswordResponse,
+    dependencies=[Depends(rate_limit("auth_forgot", max_requests=15, window_seconds=60))],
+)
 def forgot_password(
     payload: ForgotPasswordRequest,
     db: Annotated[Session, Depends(get_db)],
@@ -399,7 +425,11 @@ def forgot_password(
     )
 
 
-@router.post("/reset-password", response_model=ResetPasswordResponse)
+@router.post(
+    "/reset-password",
+    response_model=ResetPasswordResponse,
+    dependencies=[Depends(rate_limit("auth_forgot", max_requests=15, window_seconds=60))],
+)
 def reset_password(
     payload: ResetPasswordRequest,
     db: Annotated[Session, Depends(get_db)],

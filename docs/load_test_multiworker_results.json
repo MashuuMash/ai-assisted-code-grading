@@ -1,0 +1,70 @@
+{
+  "generated_at": "2026-11-17T09:45:35.404421+00:00",
+  "target": "docker-cluster-4workers-redis-postgres",
+  "stages": [
+    {
+      "stage": "load_normal_10ccu",
+      "concurrency": 10,
+      "total_requests": 200,
+      "duration_seconds": 1.531,
+      "rps": 130.67,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "p50_ms": 57.73,
+      "p95_ms": 145.41,
+      "p99_ms": 608.45,
+      "max_ms": 700.11,
+      "status_counts": {
+        "200": 200
+      }
+    },
+    {
+      "stage": "stress_burst_30ccu",
+      "concurrency": 30,
+      "total_requests": 300,
+      "duration_seconds": 3.731,
+      "rps": 80.4,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "p50_ms": 222.15,
+      "p95_ms": 1070.23,
+      "p99_ms": 1604.29,
+      "max_ms": 2421.51,
+      "status_counts": {
+        "200": 300
+      }
+    },
+    {
+      "stage": "stress_peak_60ccu",
+      "concurrency": 60,
+      "total_requests": 600,
+      "duration_seconds": 8.673,
+      "rps": 69.18,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "p50_ms": 587.9,
+      "p95_ms": 2390.8,
+      "p99_ms": 3933.74,
+      "max_ms": 5601.51,
+      "status_counts": {
+        "200": 600
+      }
+    },
+    {
+      "stage": "endurance_sustained_10s",
+      "concurrency": 10,
+      "total_requests": 1148,
+      "duration_seconds": 10.097,
+      "rps": 113.69,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "p50_ms": 58.95,
+      "p95_ms": 250.86,
+      "p99_ms": 439.76,
+      "max_ms": 756.3,
+      "status_counts": {
+        "200": 1148
+      }
+    }
+  ]
+}

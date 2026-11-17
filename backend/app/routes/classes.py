@@ -9,6 +9,7 @@ from app.authorization import can_manage_class, can_manage_course, can_view_clas
 from app.database import get_db
 from app.deletion import purge_class
 from app.models import ClassMembership, Cohort, Course, User, UserRole
+from app.redis_client import bump_cache_version
 from app.schemas import ClassCreate, ClassResponse, ClassUpdate, MembershipAdd, MembershipResponse
 
 router = APIRouter(prefix="/courses/{course_id}/classes", tags=["classes"])
@@ -212,6 +213,7 @@ def add_membership(
     db.add(membership)
     db.commit()
     db.refresh(membership)
+    bump_cache_version("courses")
     return membership
 
 
@@ -238,3 +240,4 @@ def remove_membership(
 
     db.delete(membership)
     db.commit()
+    bump_cache_version("courses")

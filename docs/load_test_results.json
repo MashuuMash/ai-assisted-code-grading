@@ -1,0 +1,70 @@
+{
+  "generated_at": "2026-11-17T08:59:05.094053+00:00",
+  "target": "self-contained-uvicorn-single-worker",
+  "stages": [
+    {
+      "stage": "load_normal_10ccu",
+      "concurrency": 10,
+      "total_requests": 200,
+      "duration_seconds": 2.253,
+      "rps": 88.78,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "p50_ms": 75.28,
+      "p95_ms": 365.0,
+      "p99_ms": 540.35,
+      "max_ms": 785.14,
+      "status_counts": {
+        "200": 200
+      }
+    },
+    {
+      "stage": "stress_burst_30ccu",
+      "concurrency": 30,
+      "total_requests": 300,
+      "duration_seconds": 5.297,
+      "rps": 56.63,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "p50_ms": 377.74,
+      "p95_ms": 1349.15,
+      "p99_ms": 1986.3,
+      "max_ms": 2483.35,
+      "status_counts": {
+        "200": 300
+      }
+    },
+    {
+      "stage": "stress_peak_60ccu",
+      "concurrency": 60,
+      "total_requests": 600,
+      "duration_seconds": 10.812,
+      "rps": 55.49,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "p50_ms": 745.71,
+      "p95_ms": 2998.61,
+      "p99_ms": 4710.73,
+      "max_ms": 6351.18,
+      "status_counts": {
+        "200": 600
+      }
+    },
+    {
+      "stage": "endurance_sustained_10s",
+      "concurrency": 10,
+      "total_requests": 1065,
+      "duration_seconds": 10.059,
+      "rps": 105.88,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "p50_ms": 66.16,
+      "p95_ms": 255.45,
+      "p99_ms": 473.68,
+      "max_ms": 1073.56,
+      "status_counts": {
+        "200": 1065
+      }
+    }
+  ]
+}

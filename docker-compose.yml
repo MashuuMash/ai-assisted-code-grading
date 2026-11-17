@@ -1,6 +1,15 @@
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    command: ["postgres", "-c", "max_connections=200"]
     environment:
       POSTGRES_DB: grading_db
       POSTGRES_USER: grading_user
@@ -13,14 +22,32 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    command: ["redis-server", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    restart: unless-stopped
+    logging: *default-logging
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     environment:
       DATABASE_URL: postgresql+psycopg2://grading_user:${POSTGRES_PASSWORD:-postgres_dev_password}@postgres:5432/grading_db
+      REDIS_URL: redis://redis:6379/0
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-8}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-12}
+      FEEDBACK_BATCH_CONCURRENCY: ${FEEDBACK_BATCH_CONCURRENCY:-4}
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
       SUBMISSION_STORAGE_PATH: /data/submissions
       JPLAG_JAR_PATH: /tools/jplag-6.2.0.jar
@@ -39,8 +66,11 @@ services:
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-VeriPie Instructor Workstation}
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
       OTP_EXPIRE_MINUTES: ${OTP_EXPIRE_MINUTES:-10}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
@@ -65,13 +95,21 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    restart: unless-stopped
+    logging: *default-logging
     environment:
       DATABASE_URL: postgresql+psycopg2://grading_user:${POSTGRES_PASSWORD:-postgres_dev_password}@postgres:5432/grading_db
+      REDIS_URL: redis://redis:6379/0
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-4}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-8}
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
       SUBMISSION_STORAGE_PATH: /data/submissions
       GRADING_SANDBOX_IMAGE: grading-sandbox:latest
     depends_on:
       backend:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       sandbox-image:
         condition: service_completed_successfully

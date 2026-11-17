@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import GradingJob, GradingJobStatus, Submission
+from app.redis_client import notify_grading_worker
 from app.schemas import BatchUploadItem, BatchUploadResponse
 from app.submission_storage import SubmissionStorage
 
@@ -300,6 +301,9 @@ def ingest_batch_zip(
                 )
 
             db.commit()
+            queued_count = sum(1 for item in submissions_created if item.job_id is not None)
+            if queued_count > 0:
+                notify_grading_worker(queued_count)
 
             return BatchUploadResponse(
                 total_found=total_found,

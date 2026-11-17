@@ -1,5 +1,6 @@
 import ast
 import math
+import threading
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -38,6 +39,10 @@ class CodeBertPrediction:
         return asdict(self)
 
 
+_MODEL_CACHE_LOCK = threading.Lock()
+_MODEL_CACHE: dict[str, tuple[Any, Any, int]] = {}
+
+
 class CodeBertDetector:
     """Experimental style signal; a trained local classifier is optional."""
 
@@ -53,28 +58,38 @@ class CodeBertDetector:
         if not TRANSFORMERS_AVAILABLE or not self.model_name or self._model is not None:
             return self.is_transformers_loaded
 
-        # Only an explicitly supplied, locally saved fine-tuned checkpoint may be loaded.
-        if not Path(self.model_name).is_dir():
-            return False
+        cache_key = str(Path(self.model_name).resolve())
+        with _MODEL_CACHE_LOCK:
+            cached = _MODEL_CACHE.get(cache_key)
+            if cached is not None:
+                self._tokenizer, self._model, self._ai_label_index = cached
+                self.is_transformers_loaded = True
+                return True
 
-        try:
-            self._tokenizer = AutoTokenizer.from_pretrained(self.model_name, local_files_only=True)
-            self._model = AutoModelForSequenceClassification.from_pretrained(
-                self.model_name, local_files_only=True
-            )
-            labels = {label.lower() for label in self._model.config.id2label.values()}
-            if labels != {"human", "ai_generated"}:
-                self._model = None
-                self._tokenizer = None
+            # Only an explicitly supplied, locally saved fine-tuned checkpoint may be loaded.
+            if not Path(self.model_name).is_dir():
                 return False
-            self._ai_label_index = next(
-                int(index) for index, label in self._model.config.id2label.items()
-                if label.lower() == "ai_generated"
-            )
-            self._model.eval()
-            self.is_transformers_loaded = True
-        except Exception:
-            self.is_transformers_loaded = False
+
+            try:
+                tokenizer = AutoTokenizer.from_pretrained(self.model_name, local_files_only=True)
+                model = AutoModelForSequenceClassification.from_pretrained(
+                    self.model_name, local_files_only=True
+                )
+                labels = {label.lower() for label in model.config.id2label.values()}
+                if labels != {"human", "ai_generated"}:
+                    return False
+                ai_idx = next(
+                    int(index) for index, label in model.config.id2label.items()
+                    if label.lower() == "ai_generated"
+                )
+                model.eval()
+                _MODEL_CACHE[cache_key] = (tokenizer, model, ai_idx)
+                self._tokenizer = tokenizer
+                self._model = model
+                self._ai_label_index = ai_idx
+                self.is_transformers_loaded = True
+            except Exception:
+                self.is_transformers_loaded = False
 
         return self.is_transformers_loaded
 

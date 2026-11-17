@@ -291,7 +291,7 @@ test.describe('Challenger Stress Test Harness', () => {
     await page.goto('/');
 
     // 1. Landing page check
-    await expect(page.getByText(/Evidence First/i)).toBeVisible();
+    await expect(page.getByText(/Grading Student Code/i)).toBeVisible();
 
     // 2. Launch demo
     const launchBtn = page.getByRole('button', { name: /Launch Interactive Live Demo/i });
@@ -325,7 +325,7 @@ test.describe('Challenger Stress Test Harness', () => {
     await exitBtn.click();
 
     // Verify return to Showcase Landing Page
-    await expect(page.getByText(/Evidence First/i)).toBeVisible();
+    await expect(page.getByText(/Grading Student Code/i)).toBeVisible();
 
     // Verify zero unhandled exceptions
     expect(pageErrors, 'Unhandled page errors during full walkthrough').toEqual([]);

@@ -391,3 +391,28 @@ def test_forgot_password_and_reset_password_flow(
     assert "access_token" in new_login.json()
 
 
+def test_security_headers_and_login_rate_limit(client: TestClient) -> None:
+    health_res = client.get("/health")
+    assert health_res.status_code == 200
+    assert health_res.headers.get("x-content-type-options") == "nosniff"
+    assert health_res.headers.get("x-frame-options") == "DENY"
+    assert "strict-origin-when-cross-origin" in (health_res.headers.get("referrer-policy") or "")
+
+    headers = {"X-Forwarded-For": "203.0.113.55"}
+    for _ in range(20):
+        res = client.post(
+            "/api/v1/auth/login/json",
+            json={"username_or_email": "unknown", "password": "BadPassword1!"},
+            headers=headers,
+        )
+        assert res.status_code == 401
+
+    blocked = client.post(
+        "/api/v1/auth/login/json",
+        json={"username_or_email": "unknown", "password": "BadPassword1!"},
+        headers=headers,
+    )
+    assert blocked.status_code == 429
+    assert "Retry-After" in blocked.headers
+
+

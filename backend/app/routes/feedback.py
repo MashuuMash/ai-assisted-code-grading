@@ -4,7 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai_feedback_engine import generate_feedback_for_submission
+from app.ai_feedback_engine import (
+    generate_batch_feedback_for_submissions,
+    generate_feedback_for_submission,
+)
 from app.auth import get_current_user
 from app.authorization import can_manage_class
 from app.database import get_db
@@ -253,42 +256,54 @@ def batch_generate_feedback(
     generated_count = 0
     failed_count = 0
     results: list[dict] = []
+    pending_ids: list[int] = []
+
+    sub_ids = [sub.id for sub in submissions]
+    confirmed_grades = {
+        g.submission_id: g.id
+        for g in db.scalars(
+            select(SubmissionGrade).where(
+                SubmissionGrade.submission_id.in_(sub_ids),
+                SubmissionGrade.status == GradeStatus.CONFIRMED,
+            )
+        ).all()
+    } if sub_ids else {}
 
     for sub in submissions:
-        existing_grade = db.scalar(
-            select(SubmissionGrade).where(SubmissionGrade.submission_id == sub.id)
-        )
-        if existing_grade and existing_grade.status == GradeStatus.CONFIRMED:
+        if sub.id in confirmed_grades:
             results.append(
                 {
                     "submission_id": sub.id,
                     "status": "skipped_confirmed",
-                    "grade_id": existing_grade.id,
+                    "grade_id": confirmed_grades[sub.id],
                 }
             )
-            continue
+        else:
+            pending_ids.append(sub.id)
 
-        try:
-            grade = generate_feedback_for_submission(
-                submission_id=sub.id,
-                db=db,
-                model_override=model_override,
-            )
-            generated_count += 1
-            results.append(
-                {
-                    "submission_id": sub.id,
-                    "status": "success",
-                    "grade_id": grade.id,
-                }
-            )
-        except Exception as exc:
+    batch_outcomes = generate_batch_feedback_for_submissions(
+        submission_ids=pending_ids,
+        db=db,
+        model_override=model_override,
+    )
+    for sub_id in pending_ids:
+        grade, exc = batch_outcomes.get(sub_id, (None, RuntimeError("Missing batch result")))
+        if exc is not None or grade is None:
             failed_count += 1
             results.append(
                 {
-                    "submission_id": sub.id,
+                    "submission_id": sub_id,
                     "status": "failed",
-                    "error": str(exc),
+                    "error": str(exc or "Unknown error"),
+                }
+            )
+        else:
+            generated_count += 1
+            results.append(
+                {
+                    "submission_id": sub_id,
+                    "status": "success",
+                    "grade_id": grade.id,
                 }
             )
 

@@ -6,9 +6,11 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, require_role
 from app.authorization import can_manage_course, can_view_course
+from app.config import get_settings
 from app.database import get_db
 from app.deletion import purge_course
 from app.models import ClassMembership, Cohort, Course, User, UserRole
+from app.redis_client import bump_cache_version, cache_get_json, cache_set_json, get_cache_version
 from app.schemas import CourseCreate, CourseResponse, CourseUpdate
 
 router = APIRouter(prefix="/courses", tags=["courses"])
@@ -18,29 +20,44 @@ router = APIRouter(prefix="/courses", tags=["courses"])
 def list_courses(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
-) -> list[Course]:
+) -> list[CourseResponse]:
+    ver = get_cache_version("courses")
+    cache_key = f"veripie:courses:v{ver}:u{current_user.id}:{current_user.role.value}"
+    cached = cache_get_json(cache_key)
+    if isinstance(cached, list):
+        return [CourseResponse.model_validate(item) for item in cached]
+
     if current_user.role == UserRole.ADMIN:
-        return list(db.scalars(select(Course).order_by(Course.created_at.desc())).all())
-    if current_user.role == UserRole.LECTURER:
-        return list(
+        courses = list(db.scalars(select(Course).order_by(Course.created_at.desc())).all())
+    elif current_user.role == UserRole.LECTURER:
+        courses = list(
             db.scalars(
                 select(Course)
                 .where(Course.instructor_id == current_user.id)
                 .order_by(Course.created_at.desc())
             ).all()
         )
-    # Student: courses with an active class membership
-    enrolled_course_ids = select(Cohort.course_id).join(
-        ClassMembership, ClassMembership.class_id == Cohort.id
-    ).where(ClassMembership.user_id == current_user.id)
+    else:
+        # Student: courses with an active class membership
+        enrolled_course_ids = select(Cohort.course_id).join(
+            ClassMembership, ClassMembership.class_id == Cohort.id
+        ).where(ClassMembership.user_id == current_user.id)
 
-    return list(
-        db.scalars(
-            select(Course)
-            .where(Course.id.in_(enrolled_course_ids))
-            .order_by(Course.created_at.desc())
-        ).all()
+        courses = list(
+            db.scalars(
+                select(Course)
+                .where(Course.id.in_(enrolled_course_ids))
+                .order_by(Course.created_at.desc())
+            ).all()
+        )
+
+    serialized = [CourseResponse.model_validate(c) for c in courses]
+    cache_set_json(
+        cache_key,
+        [item.model_dump(mode="json") for item in serialized],
+        get_settings().cache_ttl_seconds,
     )
+    return serialized
 
 
 @router.post("", response_model=CourseResponse, status_code=status.HTTP_201_CREATED)
@@ -66,6 +83,7 @@ def create_course(
     db.add(course)
     db.commit()
     db.refresh(course)
+    bump_cache_version("courses")
     return course
 
 
@@ -105,6 +123,7 @@ def update_course(
 
     db.commit()
     db.refresh(course)
+    bump_cache_version("courses")
     return course
 
 
@@ -122,3 +141,4 @@ def delete_course(
 
     purge_course(db, course)
     db.commit()
+    bump_cache_version("courses")

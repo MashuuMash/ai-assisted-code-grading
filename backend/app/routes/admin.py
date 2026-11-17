@@ -21,6 +21,7 @@ from app.models import (
     User,
     UserRole,
 )
+from app.redis_client import bump_cache_version, notify_grading_worker
 from app.schemas import (
     AdminClassItem,
     AdminCourseItem,
@@ -239,6 +240,7 @@ def retry_failed_job(
     job.started_at = None
     job.completed_at = None
     db.commit()
+    notify_grading_worker(1)
     return {"id": job.id, "status": job.status.value}
 
 
@@ -292,6 +294,7 @@ def delete_course_admin(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
     purge_course(db, course)
     db.commit()
+    bump_cache_version("courses")
 
 
 @router.get("/classes", response_model=list[AdminClassItem])

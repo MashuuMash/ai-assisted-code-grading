@@ -21,6 +21,7 @@ from app.models import (
     TestVisibility,
     User,
 )
+from app.redis_client import notify_grading_worker
 from app.schemas import (
     GradingJobResponse,
     TestCaseCreate,
@@ -247,6 +248,7 @@ def queue_grading_job(
         grade.confirmed_by_id = None
     db.commit()
     db.refresh(job)
+    notify_grading_worker(1)
 
     return GradingJobResponse(
         id=job.id,
