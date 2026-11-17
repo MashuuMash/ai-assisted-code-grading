@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Enforce strict no-emoji policy across all repository code files.
 Scans source files and fails with exit code 1 if any emoji character is detected.
