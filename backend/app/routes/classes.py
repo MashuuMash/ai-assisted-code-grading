@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.auth import get_current_user
 from app.authorization import can_manage_class, can_manage_course, can_view_class, can_view_course
 from app.database import get_db
+from app.deletion import purge_class
 from app.models import ClassMembership, Cohort, Course, User, UserRole
 from app.schemas import ClassCreate, ClassResponse, ClassUpdate, MembershipAdd, MembershipResponse
 
@@ -149,7 +150,7 @@ def delete_class(
     if not can_manage_class(current_user, cohort):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
-    db.delete(cohort)
+    purge_class(db, cohort)
     db.commit()
 
 

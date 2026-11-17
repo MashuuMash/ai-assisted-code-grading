@@ -479,13 +479,23 @@ def run_similarity_for_assignment(
                         base_source=base_code,
                     )
 
+                is_flagged = match_result.similarity_percentage >= effective_threshold
                 comp = SimilarityComparison(
                     report_id=report.id,
                     submission_a_id=sub_a.id,
                     submission_b_id=sub_b.id,
                     similarity_percentage=match_result.similarity_percentage,
                     matched_tokens=match_result.matched_tokens,
-                    status=ComparisonReviewStatus.UNREVIEWED,
+                    status=(
+                        ComparisonReviewStatus.FLAGGED
+                        if is_flagged
+                        else ComparisonReviewStatus.UNREVIEWED
+                    ),
+                    review_notes=(
+                        f"Auto-flagged: similarity {match_result.similarity_percentage:.1f}% >= {effective_threshold:.1f}% threshold"
+                        if is_flagged
+                        else None
+                    ),
                     matched_regions=match_result.matched_regions,
                 )
                 db.add(comp)

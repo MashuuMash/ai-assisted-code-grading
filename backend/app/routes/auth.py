@@ -236,6 +236,17 @@ def resend_otp(
     )
 
 
+def _inactive_account_detail() -> str:
+    settings = get_settings()
+    contact = (
+        settings.support_email.strip()
+        or settings.smtp_from_email.strip()
+        or settings.smtp_user.strip()
+        or "admin@veripie.id.vn"
+    )
+    return f"Account is deactivated. Please contact {contact} to reactivate your account."
+
+
 @router.post("/login", response_model=Token)
 def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
@@ -254,7 +265,7 @@ def login(
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is inactive",
+            detail=_inactive_account_detail(),
         )
     if not user.is_email_verified:
         raise HTTPException(
@@ -286,7 +297,7 @@ def login_json(
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is inactive",
+            detail=_inactive_account_detail(),
         )
     if not user.is_email_verified:
         raise HTTPException(

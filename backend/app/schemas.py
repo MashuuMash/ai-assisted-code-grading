@@ -288,6 +288,7 @@ class SubmissionResponse(BaseModel):
     submitted_at: datetime
     student: UserResponse | None = None
     grade: SubmissionGradeSummary | None = None
+    dedup_status: str | None = None
 
 
 class BatchUploadItem(BaseModel):
@@ -297,14 +298,18 @@ class BatchUploadItem(BaseModel):
     filename: str
     size_bytes: int
     job_id: int | None = None
+    action: str = "imported"
 
 
 class BatchUploadResponse(BaseModel):
     total_found: int
     imported_count: int
+    updated_count: int = 0
+    skipped_count: int = 0
     failed_count: int
     submissions: list[BatchUploadItem]
     errors: list[str] = []
+    skipped: list[str] = []
 
 
 class EvidenceResponse(BaseModel):
@@ -579,4 +584,71 @@ class BatchAiDetectionResponse(BaseModel):
     total_analyzed: int
     high_probability_count: int
     results: list[AiDetectionResponse] = []
+
+
+class AdminFailedJobItem(BaseModel):
+    id: int
+    submission_id: int
+    error_message: str | None = None
+    created_at: datetime
+
+
+class AdminOverviewResponse(BaseModel):
+    total_users: int
+    users_by_role: dict[str, int]
+    total_courses: int
+    total_classes: int
+    total_assignments: int
+    total_submissions: int
+    jobs_by_status: dict[str, int]
+    recent_failed_jobs: list[AdminFailedJobItem] = []
+
+
+class AdminUserUpdate(BaseModel):
+    role: UserRole | None = None
+    is_active: bool | None = None
+    is_email_verified: bool | None = None
+
+
+class AdminUserCreate(BaseModel):
+    username: str = Field(min_length=3, max_length=64)
+    email: EmailStr
+    full_name: str = Field(min_length=1, max_length=128)
+    password: str = Field(min_length=6, max_length=128)
+    role: UserRole = UserRole.LECTURER
+    is_active: bool = True
+
+
+class AdminCourseItem(BaseModel):
+    id: int
+    code: str
+    name: str
+    instructor_id: int
+    instructor_name: str
+    instructor_email: str
+    class_count: int
+    submission_count: int
+    created_at: datetime
+
+
+class AdminClassItem(BaseModel):
+    id: int
+    course_id: int
+    course_code: str
+    code: str
+    name: str
+    semester: str
+    year: int
+    assignment_count: int
+    created_at: datetime
+
+
+class AdminSystemHealth(BaseModel):
+    database_ok: bool
+    storage_ok: bool
+    worker_mode: str
+    queued_jobs: int
+    running_jobs: int
+    failed_jobs: int
+    checked_at: datetime
 

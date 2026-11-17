@@ -180,6 +180,7 @@ export const CodeViewer: React.FC<CodeViewerProps> = ({
   onClearHighlight,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [pulsingLines, setPulsingLines] = useState<Set<number>>(new Set());
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lineRowRefs = useRef<Record<number, HTMLTableRowElement | null>>({});
   const lines = code.split('\n');
@@ -195,9 +196,24 @@ export const CodeViewer: React.FC<CodeViewerProps> = ({
     return map;
   }, [highlightedLines, lineHighlights]);
 
+  const scrollToLine = (targetLine: number) => {
+    const rowEl = lineRowRefs.current[targetLine];
+    const containerEl = scrollContainerRef.current;
+    if (rowEl && containerEl) {
+      const rowTop = rowEl.offsetTop;
+      const targetScroll = Math.max(0, rowTop - containerEl.clientHeight / 3);
+      containerEl.scrollTo({ top: targetScroll, behavior: 'smooth' });
+    }
+    setPulsingLines(new Set([targetLine]));
+  };
+
   useEffect(() => {
-    if (highlightMap.size === 0) return;
-    const firstLine = Math.min(...Array.from(highlightMap.keys()));
+    if (highlightMap.size === 0) {
+      setPulsingLines(new Set());
+      return;
+    }
+    const keys = Array.from(highlightMap.keys());
+    const firstLine = Math.min(...keys);
     const rowEl = lineRowRefs.current[firstLine];
     const containerEl = scrollContainerRef.current;
     if (rowEl && containerEl) {
@@ -205,6 +221,11 @@ export const CodeViewer: React.FC<CodeViewerProps> = ({
       const targetScroll = Math.max(0, rowTop - containerEl.clientHeight / 3);
       containerEl.scrollTo({ top: targetScroll, behavior: 'smooth' });
     }
+    setPulsingLines(new Set(keys));
+    const timer = window.setTimeout(() => {
+      setPulsingLines(new Set());
+    }, 1600);
+    return () => window.clearTimeout(timer);
   }, [highlightMap]);
 
   const handleCopy = () => {
@@ -244,14 +265,32 @@ export const CodeViewer: React.FC<CodeViewerProps> = ({
       {/* Active Markpen Highlight Legend Banner */}
       {activeHighlightSummary && bannerStyle && highlightMap.size > 0 && (
         <div
-          className={`px-4 py-1.5 border-b ${bannerStyle.bannerBg} ${bannerStyle.bannerBorder} ${bannerStyle.bannerText} flex items-center justify-between text-[11px] shrink-0 transition-all`}
+          className={`px-4 py-1.5 border-b ${bannerStyle.bannerBg} ${bannerStyle.bannerBorder} ${bannerStyle.bannerText} flex flex-wrap items-center justify-between gap-2 text-[11px] shrink-0 transition-all`}
         >
-          <div className="flex items-center space-x-2 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
             <Highlighter className="w-3.5 h-3.5 shrink-0" />
             <span className="font-semibold truncate">{activeHighlightSummary.title}</span>
-            <span className="font-mono text-[10px] opacity-80 shrink-0">
-              ({highlightMap.size} {highlightMap.size === 1 ? 'line' : 'lines'} marked)
-            </span>
+            <div className="flex items-center gap-1 flex-wrap">
+              {Array.from(highlightMap.keys())
+                .sort((a, b) => a - b)
+                .slice(0, 8)
+                .map((ln) => (
+                  <button
+                    key={ln}
+                    type="button"
+                    onClick={() => scrollToLine(ln)}
+                    className="px-1.5 py-0.5 rounded bg-black/25 hover:bg-black/45 font-mono text-[10px] font-bold transition-colors cursor-pointer"
+                    title={`Jump to line ${ln}`}
+                  >
+                    L{ln}
+                  </button>
+                ))}
+              {highlightMap.size > 8 && (
+                <span className="font-mono text-[10px] opacity-80">
+                  +{highlightMap.size - 8} more
+                </span>
+              )}
+            </div>
           </div>
           {onClearHighlight && (
             <button
@@ -278,6 +317,7 @@ export const CodeViewer: React.FC<CodeViewerProps> = ({
               const lineNo = idx + 1;
               const highlight = highlightMap.get(lineNo);
               const style = highlight ? HIGHLIGHT_STYLES[highlight.kind] : null;
+              const isPulsing = pulsingLines.has(lineNo);
 
               return (
                 <tr
@@ -287,7 +327,7 @@ export const CodeViewer: React.FC<CodeViewerProps> = ({
                   }}
                   className={`transition-colors duration-150 ${
                     style
-                      ? `${style.rowBg} ${style.borderLeft}`
+                      ? `${style.rowBg} ${style.borderLeft} ${isPulsing ? 'animate-pulse ring-1 ring-inset ring-[#F2C46A]/80' : ''}`
                       : 'hover:bg-[#312B27]/70 border-l-4 border-transparent'
                   }`}
                 >

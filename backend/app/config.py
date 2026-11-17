@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from_email: str = ""
     smtp_from_name: str = "VeriPie Instructor Workstation"
+    support_email: str = ""
     otp_expire_minutes: int = 10
 
 

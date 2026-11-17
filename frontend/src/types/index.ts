@@ -245,6 +245,8 @@ export interface SimilarityReport {
 export interface BatchIngestResponse {
   total_found: number;
   imported_count: number;
+  updated_count?: number;
+  skipped_count?: number;
   failed_count: number;
   submissions: Array<{
     submission_id: number;
@@ -253,6 +255,75 @@ export interface BatchIngestResponse {
     filename: string;
     size_bytes: number;
     job_id: number | null;
+    action?: 'imported' | 'updated' | 'skipped' | string;
   }>;
   errors: string[];
+  skipped?: string[];
+}
+
+export interface AdminFailedJobItem {
+  id: number;
+  submission_id: number;
+  error_message?: string | null;
+  created_at: string;
+}
+
+export interface AdminOverview {
+  total_users: number;
+  users_by_role: Record<string, number>;
+  total_courses: number;
+  total_classes: number;
+  total_assignments: number;
+  total_submissions: number;
+  jobs_by_status: Record<string, number>;
+  recent_failed_jobs: AdminFailedJobItem[];
+}
+
+export interface AdminUserUpdatePayload {
+  role?: UserRole;
+  is_active?: boolean;
+  is_email_verified?: boolean;
+}
+
+export interface AdminUserCreatePayload {
+  username: string;
+  email: string;
+  full_name: string;
+  password: string;
+  role: UserRole;
+  is_active?: boolean;
+}
+
+export interface AdminCourseItem {
+  id: number;
+  code: string;
+  name: string;
+  instructor_id: number;
+  instructor_name: string;
+  instructor_email: string;
+  class_count: number;
+  submission_count: number;
+  created_at: string;
+}
+
+export interface AdminClassItem {
+  id: number;
+  course_id: number;
+  course_code: string;
+  code: string;
+  name: string;
+  semester: string;
+  year: number;
+  assignment_count: number;
+  created_at: string;
+}
+
+export interface AdminSystemHealth {
+  database_ok: boolean;
+  storage_ok: boolean;
+  worker_mode: string;
+  queued_jobs: number;
+  running_jobs: number;
+  failed_jobs: number;
+  checked_at: string;
 }

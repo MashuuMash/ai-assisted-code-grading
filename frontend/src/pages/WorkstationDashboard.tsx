@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Columns,
   Cpu,
   Download,
   FileSearch,
@@ -17,6 +18,8 @@ import {
   Search,
   ShieldAlert,
   Sliders,
+  Sparkles,
+  Trash2,
   Users,
 } from 'lucide-react';
 import { api, DemoSeedResponse } from '../api/client';
@@ -28,6 +31,7 @@ import { FeedbackDraftEditor } from '../components/FeedbackDraftEditor';
 import { GradeOverridePanel } from '../components/GradeOverridePanel';
 import { Navbar } from '../components/Navbar';
 import { RubricManager } from '../components/RubricManager';
+import { SimilarityCompareModal } from '../components/SimilarityCompareModal';
 import { SimilarityWorkbench } from '../components/SimilarityWorkbench';
 import { WorkspaceSetup } from '../components/WorkspaceSetup';
 import { AssignmentEditor } from '../components/AssignmentEditor';
@@ -54,8 +58,11 @@ import {
 import {
   Assignment,
   ClassCohort,
+  ComparisonReviewStatus,
   Course,
   Rubric,
+  SimilarityComparison,
+  SimilarityReport,
   Submission,
   SubmissionEvidence,
   SubmissionGrade,
@@ -456,27 +463,32 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
     loadAssignments();
   }, [selectedCourseId, selectedClassId]);
 
-  // 4. Assignment changed: load submissions & rubric
+  const [similarityReports, setSimilarityReports] = useState<SimilarityReport[]>([]);
+
+  // 4. Assignment changed: load submissions, rubric & similarity reports
   const loadAssignmentData = useCallback(async () => {
     const requestId = ++assignmentRequestId.current;
     if (!selectedCourseId || !selectedClassId || !selectedAssignmentId) {
       setSubmissions([]);
       setRubric(null);
+      setSimilarityReports([]);
       setSelectedSubmissionId(null);
       return;
     }
     setLoadingList(true);
     setWorkspaceError('');
     try {
-      const [subsList, rubData] = await Promise.all([
+      const [subsList, rubData, simReports] = await Promise.all([
         api.submissions.list(selectedCourseId, selectedClassId, selectedAssignmentId),
         api.rubrics.get(selectedCourseId, selectedClassId, selectedAssignmentId).catch(() => null),
+        api.similarity.listReports(selectedCourseId, selectedClassId, selectedAssignmentId).catch(() => []),
       ]);
 
       if (requestId !== assignmentRequestId.current) return;
 
       setSubmissions(subsList);
       setRubric(rubData);
+      setSimilarityReports(simReports);
       if (subsList.length > 0) {
         setSelectedSubmissionId((previous) => subsList.some((sub) => sub.id === previous) ? previous : subsList[0].id);
       } else {
@@ -750,6 +762,218 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
   };
 
   const [detectingAi, setDetectingAi] = useState(false);
+  const [batchGeneratingFeedback, setBatchGeneratingFeedback] = useState(false);
+  const [runningFullAnalysis, setRunningFullAnalysis] = useState(false);
+  const [analysisStatusText, setAnalysisStatusText] = useState('');
+  const [deletingSubId, setDeletingSubId] = useState<number | null>(null);
+  const [clearingAllSubs, setClearingAllSubs] = useState(false);
+  const [compareModalCompId, setCompareModalCompId] = useState<number | null>(null);
+  const [compareModalCodes, setCompareModalCodes] = useState<{
+    codeA: string;
+    codeB: string;
+    loading: boolean;
+  }>({ codeA: '', codeB: '', loading: false });
+  const [compareModalBusy, setCompareModalBusy] = useState(false);
+
+  const latestReport = similarityReports[0] ?? null;
+
+  const submissionSimilarityMap = useMemo(() => {
+    const map = new Map<number, SimilarityComparison>();
+    const comparisons = latestReport?.comparisons || [];
+    const priority = (status: string) =>
+      status === 'flagged' ? 3 : status === 'unreviewed' ? 2 : 1;
+
+    for (const comp of comparisons) {
+      for (const sid of [comp.submission_a_id, comp.submission_b_id]) {
+        const existing = map.get(sid);
+        if (
+          !existing ||
+          priority(comp.status) > priority(existing.status) ||
+          (priority(comp.status) === priority(existing.status) &&
+            comp.similarity_percentage > existing.similarity_percentage)
+        ) {
+          map.set(sid, comp);
+        }
+      }
+    }
+    return map;
+  }, [latestReport]);
+
+  const activeCompareModalComp = useMemo(() => {
+    if (compareModalCompId === null) return null;
+    for (const rep of similarityReports) {
+      const found = rep.comparisons?.find((c) => c.id === compareModalCompId);
+      if (found) return found;
+    }
+    return null;
+  }, [compareModalCompId, similarityReports]);
+
+  const handleOpenSimilarityModal = async (comp: SimilarityComparison) => {
+    if (!selectedCourseId || !selectedClassId || !selectedAssignmentId) return;
+    setCompareModalCompId(comp.id);
+    setCompareModalCodes({ codeA: '', codeB: '', loading: true });
+    try {
+      const [codeA, codeB] = await Promise.all([
+        api.submissions
+          .getSource(selectedCourseId, selectedClassId, selectedAssignmentId, comp.submission_a_id)
+          .catch(() => getDemoSubmissionCode(comp.submission_a_id)),
+        api.submissions
+          .getSource(selectedCourseId, selectedClassId, selectedAssignmentId, comp.submission_b_id)
+          .catch(() => getDemoSubmissionCode(comp.submission_b_id)),
+      ]);
+      setCompareModalCodes({ codeA, codeB, loading: false });
+    } catch {
+      setCompareModalCodes({
+        codeA: getDemoSubmissionCode(comp.submission_a_id),
+        codeB: getDemoSubmissionCode(comp.submission_b_id),
+        loading: false,
+      });
+    }
+  };
+
+  const handleReviewComparisonInModal = async (
+    compId: number,
+    status: ComparisonReviewStatus,
+    notes: string
+  ) => {
+    if (!selectedCourseId || !selectedClassId || !selectedAssignmentId || !activeCompareModalComp) return;
+    setCompareModalBusy(true);
+    try {
+      const updated = await api.similarity.reviewComparison(
+        selectedCourseId,
+        selectedClassId,
+        selectedAssignmentId,
+        activeCompareModalComp.report_id,
+        compId,
+        { status, review_notes: notes }
+      );
+      setSimilarityReports((prev) =>
+        prev.map((rep) => ({
+          ...rep,
+          comparisons: rep.comparisons?.map((c) => (c.id === compId ? updated : c)),
+        }))
+      );
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not update similarity review');
+    } finally {
+      setCompareModalBusy(false);
+    }
+  };
+
+  const handleBatchGenerateFeedback = async () => {
+    if (!selectedCourseId || !selectedClassId || !selectedAssignmentId) return;
+    setBatchGeneratingFeedback(true);
+    setActionError('');
+    try {
+      const res = await api.feedback.batchGenerate(
+        selectedCourseId,
+        selectedClassId,
+        selectedAssignmentId
+      );
+      await loadAssignmentData();
+      await loadSubmissionDetail();
+      return {
+        generated_count: res.generated_count,
+        total_submissions: res.total_submissions,
+      };
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : 'Batch feedback generation failed. Please retry.'
+      );
+      throw err;
+    } finally {
+      setBatchGeneratingFeedback(false);
+    }
+  };
+
+  const handleRunFullAnalysis = async () => {
+    if (!selectedCourseId || !selectedClassId || !selectedAssignmentId || submissions.length === 0) return;
+    setRunningFullAnalysis(true);
+    setActionError('');
+    const base = `/courses/${selectedCourseId}/classes/${selectedClassId}/assignments/${selectedAssignmentId}`;
+    try {
+      const ungraded = submissions.filter((s) => !s.grade);
+      if (ungraded.length > 0) {
+        setAnalysisStatusText(`Grading ${ungraded.length} submissions...`);
+        await Promise.all(ungraded.map((s) => api.jobs.queue(base, s.id).catch(() => null)));
+
+        // Wait briefly for worker grading jobs to produce test/lint/ast evidence before feedback generation
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+          const refreshed = await api.submissions
+            .list(selectedCourseId, selectedClassId, selectedAssignmentId)
+            .catch(() => null);
+          if (refreshed && refreshed.every((s) => Boolean(s.grade))) {
+            break;
+          }
+        }
+      }
+
+      setAnalysisStatusText('Running AI Signal (CodeBERT)...');
+      await api.aiDetector
+        .batchDetect(selectedCourseId, selectedClassId, selectedAssignmentId)
+        .catch(() => null);
+
+      if (submissions.length >= 2) {
+        setAnalysisStatusText('Running Similarity & Auto-Flag...');
+        await api.similarity
+          .run(selectedCourseId, selectedClassId, selectedAssignmentId, 50.0)
+          .catch(() => null);
+      }
+
+      setAnalysisStatusText('Batch Generating AI Feedback...');
+      await api.feedback
+        .batchGenerate(selectedCourseId, selectedClassId, selectedAssignmentId)
+        .catch(() => null);
+
+      setAnalysisStatusText('Refreshing results...');
+      await loadAssignmentData();
+      await loadSubmissionDetail();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Full analysis failed. Please retry.');
+    } finally {
+      setRunningFullAnalysis(false);
+      setAnalysisStatusText('');
+    }
+  };
+
+  const handleDeleteSubmission = async (subId: number, label: string) => {
+    if (!selectedCourseId || !selectedClassId || !selectedAssignmentId) return;
+    if (!window.confirm(`Delete submission "${label}"? This removes the file, grades, and evidence permanently.`)) {
+      return;
+    }
+    setDeletingSubId(subId);
+    setActionError('');
+    try {
+      await api.submissions.deleteOne(selectedCourseId, selectedClassId, selectedAssignmentId, subId);
+      await loadAssignmentData();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to delete submission');
+    } finally {
+      setDeletingSubId(null);
+    }
+  };
+
+  const handleDeleteAllSubmissions = async () => {
+    if (!selectedCourseId || !selectedClassId || !selectedAssignmentId || submissions.length === 0) return;
+    if (
+      !window.confirm(
+        `Delete ALL ${submissions.length} submissions in this assignment? All grades, evidence, and similarity reports will be permanently removed.`
+      )
+    ) {
+      return;
+    }
+    setClearingAllSubs(true);
+    setActionError('');
+    try {
+      await api.submissions.deleteAll(selectedCourseId, selectedClassId, selectedAssignmentId);
+      await loadAssignmentData();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to clear submissions');
+    } finally {
+      setClearingAllSubs(false);
+    }
+  };
 
   const handleDetectAi = async () => {
     if (!selectedCourseId || !selectedClassId || !selectedAssignmentId || !selectedSubmissionId) return;
@@ -971,6 +1195,16 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
             >
               <Archive className="w-3.5 h-3.5 text-[#AEAC78] dark:text-[#F2C46A]" />
               <span>Import LMS ZIP</span>
+            </button>
+
+            <button
+              onClick={handleRunFullAnalysis}
+              disabled={!selectedAssignmentId || submissions.length === 0 || runningFullAnalysis}
+              className="px-3 py-1.5 bg-[#4C4541] hover:bg-[#38322E] dark:bg-[#F2C46A] dark:hover:bg-[#e5b65b] text-[#FCF0DA] dark:text-[#4C4541] rounded-lg text-xs font-bold inline-flex items-center space-x-1.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-95 border border-[#AEAC78]/50 shadow-xs cursor-pointer disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none disabled:active:scale-100"
+              title="Run Auto-Grade, Batch AI Signal, Similarity Auto-Flag, and Batch AI Feedback in one pipeline"
+            >
+              <Sparkles className={cn("w-3.5 h-3.5", runningFullAnalysis && "animate-spin")} />
+              <span>{runningFullAnalysis ? analysisStatusText || 'Running Analysis...' : 'Run Full Analysis'}</span>
             </button>
 
             <button
@@ -1314,6 +1548,26 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
               <WorkspaceSetup
                 courseId={selectedCourseId}
                 classId={selectedClassId}
+                assignmentId={selectedAssignmentId}
+                courses={courses}
+                classes={classes}
+                assignments={assignments}
+                onSelectCourse={(id) => {
+                  clearAssignmentView();
+                  setSelectedClassId(null);
+                  setSelectedAssignmentId(null);
+                  setSelectedCourseId(id);
+                }}
+                onSelectClass={(id) => {
+                  clearAssignmentView();
+                  setSelectedAssignmentId(null);
+                  setSelectedClassId(id);
+                }}
+                onOpenAssignment={(id, targetTab) => {
+                  clearAssignmentView();
+                  setSelectedAssignmentId(id);
+                  setActiveTab(targetTab);
+                }}
                 onCourseCreated={(course) => {
                   clearAssignmentView();
                   setSelectedClassId(null);
@@ -1332,6 +1586,39 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                   setAssignments((previous) => [assignment, ...previous]);
                   setSelectedAssignmentId(assignment.id);
                   setActiveTab('assignment');
+                }}
+                onCourseDeleted={(deletedId) => {
+                  setCourses((previous) => {
+                    const remaining = previous.filter((c) => c.id !== deletedId);
+                    if (deletedId === selectedCourseId) {
+                      clearAssignmentView();
+                      setSelectedClassId(null);
+                      setSelectedAssignmentId(null);
+                      setSelectedCourseId(remaining.length > 0 ? remaining[0].id : null);
+                    }
+                    return remaining;
+                  });
+                }}
+                onClassDeleted={(deletedId) => {
+                  setClasses((previous) => {
+                    const remaining = previous.filter((cl) => cl.id !== deletedId);
+                    if (deletedId === selectedClassId) {
+                      clearAssignmentView();
+                      setSelectedAssignmentId(null);
+                      setSelectedClassId(remaining.length > 0 ? remaining[0].id : null);
+                    }
+                    return remaining;
+                  });
+                }}
+                onAssignmentDeleted={(deletedId) => {
+                  setAssignments((previous) => {
+                    const remaining = previous.filter((a) => a.id !== deletedId);
+                    if (deletedId === selectedAssignmentId) {
+                      clearAssignmentView();
+                      setSelectedAssignmentId(remaining.length > 0 ? remaining[0].id : null);
+                    }
+                    return remaining;
+                  });
                 }}
               />
             </div>
@@ -1404,8 +1691,20 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                     </span>
                     <div className="flex items-center gap-1.5">
                       <span className="hidden sm:inline-block font-mono text-[10px] px-1.5 py-0.5 rounded bg-[#FCF0DA] dark:bg-[#2C2623] text-[#4C4541] dark:text-[#FCF0DA] border border-[#AEAC78]/40">
-                        [K]/[J]
+                        [J]/[K]
                       </span>
+                      {submissions.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleDeleteAllSubmissions}
+                          disabled={clearingAllSubs}
+                          className="text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 px-1.5 py-0.5 rounded border border-rose-300/60 dark:border-rose-800/60 text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer disabled:opacity-40"
+                          title="Delete all submissions in this assignment"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>{clearingAllSubs ? 'Clearing...' : 'Clear All'}</span>
+                        </button>
+                      )}
                       <button
                         onClick={loadAssignmentData}
                         className="text-[#AEAC78] hover:text-[#4C4541] dark:hover:text-[#F2C46A] p-1 cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95 disabled:hover:scale-100"
@@ -1530,57 +1829,89 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                           ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
                           : 'bg-[#FCF0DA]/50 dark:bg-[#2C2623]/60 text-[#AEAC78] border border-[#AEAC78]/40';
 
+                      const simMatch = submissionSimilarityMap.get(sub.id);
+                      const isSimFlagged = simMatch?.status === 'flagged';
+                      const simPct = simMatch ? Math.round(simMatch.similarity_percentage) : null;
+                      const rowLabel = sub.student_name || sub.student_identifier || `Submission #${sub.id}`;
+
                       return (
-                        <button
-                          type="button"
+                        <div
+                          role="button"
+                          tabIndex={0}
                           data-testid="submission-item"
                           aria-pressed={isSelected}
                           key={sub.id}
                           onClick={() => handleSelectSubmission(sub.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleSelectSubmission(sub.id);
+                            }
+                          }}
                           className={cn(
-                            'w-full text-left p-2.5 rounded-xl cursor-pointer text-sm transition-all duration-200',
+                            'w-full text-left p-2.5 rounded-xl cursor-pointer text-sm transition-all duration-200 group',
                             isSelected
                               ? 'bg-[#FCF0DA]/80 dark:bg-[#2C2623] border-l-4 border-[#F2C46A] ring-1 ring-[#F2C46A]/40 shadow-xs'
                               : 'hover:bg-[#FCF0DA]/35 dark:hover:bg-[#2C2623]/60 border-l-4 border-transparent'
                           )}
                         >
-                          <div className="flex items-start justify-between">
-                            <div className="min-w-0 flex-1 mr-2">
-                              <div className="flex items-center gap-1.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 {isSelected && (
                                   <span className="w-1.5 h-1.5 rounded-full bg-[#F2C46A] shrink-0 animate-pulse" />
                                 )}
                                 <div className="font-bold text-[#4C4541] dark:text-[#FCF0DA] truncate">
-                                  {sub.student_name || sub.student_identifier || `Submission #${sub.id}`}
+                                  {rowLabel}
                                 </div>
+                                {isSimFlagged && simPct !== null && (
+                                  <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800 shrink-0">
+                                    Flagged {simPct}%
+                                  </span>
+                                )}
                               </div>
                               <div className="text-[11px] font-mono text-[#6B625B] dark:text-[#AEAC78] mt-0.5 truncate">
                                 ID: <code>{sub.student_identifier || 'N/A'}</code> - <code>{sub.original_filename}</code>
                               </div>
                             </div>
 
-                            <div className="text-right shrink-0">
-                              {displayScore !== undefined && displayScore !== null ? (
-                                <span className="font-mono font-bold text-xs text-[#4C4541] dark:text-[#F2C46A]">
-                                  {displayScore.toFixed(2)} pts
-                                </span>
-                              ) : (
-                                <span className="text-[11px] text-[#AEAC78] italic">ungraded</span>
-                              )}
-                              <div className="mt-0.5">
-                                <span
-                                  data-testid="status-badge"
-                                  className={cn(
-                                    'text-[9px] font-bold uppercase px-2 py-0.5 rounded-full inline-block tracking-wider',
-                                    badgeColorClass
-                                  )}
-                                >
-                                  {statusStr}
-                                </span>
+                            <div className="flex items-start gap-1.5 shrink-0">
+                              <div className="text-right">
+                                {displayScore !== undefined && displayScore !== null ? (
+                                  <span className="font-mono font-bold text-xs text-[#4C4541] dark:text-[#F2C46A]">
+                                    {displayScore.toFixed(2)} pts
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px] text-[#AEAC78] italic">ungraded</span>
+                                )}
+                                <div className="mt-0.5">
+                                  <span
+                                    data-testid="status-badge"
+                                    className={cn(
+                                      'text-[9px] font-bold uppercase px-2 py-0.5 rounded-full inline-block tracking-wider',
+                                      badgeColorClass
+                                    )}
+                                  >
+                                    {statusStr}
+                                  </span>
+                                </div>
                               </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteSubmission(sub.id, rowLabel);
+                                }}
+                                disabled={deletingSubId === sub.id}
+                                className="p-1 rounded-md text-[#AEAC78] hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 opacity-60 group-hover:opacity-100 transition-all cursor-pointer disabled:opacity-40"
+                                title={`Delete submission ${rowLabel}`}
+                                aria-label={`Delete submission ${rowLabel}`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
-                        </button>
+                        </div>
                       );
                     })
                   )}
@@ -1614,6 +1945,10 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                       const astCount = evidenceList.filter((e) => e.source === 'ast').length;
                       const jplagItem = evidenceList.find((e) => e.source === 'jplag');
                       const codebertItem = evidenceList.find((e) => e.source === 'codebert');
+                      const activeSimMatch = selectedSubmissionId
+                        ? submissionSimilarityMap.get(selectedSubmissionId)
+                        : undefined;
+                      const isActiveFlagged = activeSimMatch?.status === 'flagged';
 
                       return (
                         <div className="bg-[#FFFDF9] dark:bg-[#38322E] rounded-2xl border border-[#AEAC78]/35 dark:border-[#AEAC78]/25 px-3.5 py-2.5 shadow-sm flex flex-col gap-2 shrink-0">
@@ -1630,6 +1965,11 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                                   <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-[#FCF0DA]/60 dark:bg-[#2C2623] text-[#4C4541] dark:text-[#FCF0DA] border border-[#AEAC78]/35">
                                     ID: {selectedSubmission?.student_identifier || selectedSubmissionId}
                                   </span>
+                                  {isActiveFlagged && activeSimMatch && (
+                                    <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-md bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800">
+                                      Flagged {Math.round(activeSimMatch.similarity_percentage)}%
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="text-[11px] text-[#6B625B] dark:text-[#AEAC78] font-mono truncate">
                                   Source: <code>{selectedSubmission?.original_filename || 'solution.py'}</code>
@@ -1642,26 +1982,26 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                               </div>
                             </div>
 
-                            {/* Prev [K] / Next [J] Student Navigation Controls */}
+                            {/* Prev [J] / Next [K] Student Navigation Controls */}
                             <div className="flex items-center gap-1 shrink-0">
                               <button
                                 type="button"
                                 onClick={handlePrevSubmission}
                                 disabled={activeIndex <= 0}
                                 className="px-2 py-1 rounded-lg border border-[#AEAC78]/50 bg-[#FCF0DA]/50 dark:bg-[#2C2623] hover:bg-[#FCF0DA] text-[#4C4541] dark:text-[#FCF0DA] text-[11px] font-mono font-bold inline-flex items-center gap-0.5 cursor-pointer disabled:opacity-40"
-                                title="Previous submission (Shortcut: K)"
+                                title="Previous submission (Shortcut: J)"
                               >
                                 <ChevronLeft className="w-3.5 h-3.5" />
-                                <span>Prev [K]</span>
+                                <span>Prev [J]</span>
                               </button>
                               <button
                                 type="button"
                                 onClick={handleNextSubmission}
                                 disabled={activeIndex === -1 || activeIndex >= filteredSubmissions.length - 1}
                                 className="px-2 py-1 rounded-lg border border-[#AEAC78]/50 bg-[#FCF0DA]/50 dark:bg-[#2C2623] hover:bg-[#FCF0DA] text-[#4C4541] dark:text-[#FCF0DA] text-[11px] font-mono font-bold inline-flex items-center gap-0.5 cursor-pointer disabled:opacity-40"
-                                title="Next submission (Shortcut: J)"
+                                title="Next submission (Shortcut: K)"
                               >
-                                <span>Next [J]</span>
+                                <span>Next [K]</span>
                                 <ChevronRight className="w-3.5 h-3.5" />
                               </button>
                             </div>
@@ -1726,24 +2066,48 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                                 <span>Complexity ({astCount})</span>
                               </button>
                             )}
-                            {jplagItem && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEvidenceCategory((prev) => (prev === 'jplag' ? 'all' : 'jplag'));
-                                  setSelectedEvidence(null);
-                                }}
-                                className={cn(
-                                  'px-2 py-0.5 rounded-lg font-bold inline-flex items-center gap-1 transition-all cursor-pointer border',
-                                  evidenceCategory === 'jplag'
-                                    ? 'bg-[#4C4541] text-[#FCF0DA] border-[#4C4541] shadow-xs'
-                                    : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/50 hover:bg-rose-500/25'
+                            {(jplagItem || activeSimMatch) && (
+                              <>
+                                {jplagItem && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEvidenceCategory((prev) => (prev === 'jplag' ? 'all' : 'jplag'));
+                                      setSelectedEvidence(null);
+                                    }}
+                                    className={cn(
+                                      'px-2 py-0.5 rounded-lg font-bold inline-flex items-center gap-1 transition-all cursor-pointer border',
+                                      evidenceCategory === 'jplag'
+                                        ? 'bg-[#4C4541] text-[#FCF0DA] border-[#4C4541] shadow-xs'
+                                        : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/50 hover:bg-rose-500/25'
+                                    )}
+                                    title="Click to mark similarity regions in code"
+                                  >
+                                    <ShieldAlert className="w-3 h-3" />
+                                    <span>
+                                      Similarity {Math.round(jplagItem.metric_value || activeSimMatch?.similarity_percentage || 0)}%
+                                    </span>
+                                  </button>
                                 )}
-                                title="Click to mark similarity regions in code"
-                              >
-                                <ShieldAlert className="w-3 h-3" />
-                                <span>Similarity {Math.round(jplagItem.metric_value || 0)}%</span>
-                              </button>
+                                {activeSimMatch && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenSimilarityModal(activeSimMatch)}
+                                    className={cn(
+                                      'px-2 py-0.5 rounded-lg font-bold inline-flex items-center gap-1 transition-all cursor-pointer border',
+                                      isActiveFlagged
+                                        ? 'bg-rose-600 hover:bg-rose-500 text-white border-rose-700 shadow-xs'
+                                        : 'bg-[#FCF0DA] dark:bg-[#2C2623] hover:bg-[#F2C46A]/30 text-[#4C4541] dark:text-[#F2C46A] border-[#AEAC78]/50'
+                                    )}
+                                    title="Open side-by-side comparison modal right here"
+                                  >
+                                    <Columns className="w-3 h-3" />
+                                    <span>
+                                      Compare ({Math.round(activeSimMatch.similarity_percentage)}%)
+                                    </span>
+                                  </button>
+                                )}
+                              </>
                             )}
                             {codebertItem && (
                               <button
@@ -1897,6 +2261,8 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
                           key={selectedSubmissionId}
                           grade={submissionGrade}
                           onGenerate={handleGenerateFeedback}
+                          onBatchGenerate={handleBatchGenerateFeedback}
+                          batchLoading={batchGeneratingFeedback}
                           onSaveFeedback={handleSaveFeedback}
                           onSelectEvidence={(evidenceId) => {
                             const found = evidenceList.find((e) => e.id === evidenceId);
@@ -1933,6 +2299,24 @@ export const WorkstationDashboard: React.FC<WorkstationDashboardProps> = ({
           onIngestSuccess={loadAssignmentData}
         />
       )}
+
+      {/* Side-by-Side Similarity Comparison Modal inside Grading Queue */}
+      <SimilarityCompareModal
+        isOpen={compareModalCompId !== null}
+        comparison={activeCompareModalComp}
+        codeA={compareModalCodes.codeA}
+        codeB={compareModalCodes.codeB}
+        loading={compareModalCodes.loading}
+        submissions={submissions}
+        initialNote={activeCompareModalComp?.review_notes || ''}
+        actionLoading={compareModalBusy}
+        onClose={() => setCompareModalCompId(null)}
+        onReview={handleReviewComparisonInModal}
+        onSelectSubmissions={(subAId) => {
+          setCompareModalCompId(null);
+          setSelectedSubmissionId(subAId);
+        }}
+      />
     </div>
   );
 };

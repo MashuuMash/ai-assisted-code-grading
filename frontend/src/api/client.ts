@@ -1,4 +1,10 @@
 import {
+  AdminClassItem,
+  AdminCourseItem,
+  AdminOverview,
+  AdminSystemHealth,
+  AdminUserCreatePayload,
+  AdminUserUpdatePayload,
   Assignment,
   BatchAiDetectionResponse,
   BatchIngestResponse,
@@ -18,6 +24,7 @@ import {
   SubmissionEvidence,
   SubmissionGrade,
   User,
+  UserRole,
   TestCase,
   GradingJob,
 } from '../types';
@@ -214,6 +221,42 @@ export const api = {
     },
   },
 
+  admin: {
+    overview: (): Promise<AdminOverview> => request<AdminOverview>('/admin/overview'),
+    listUsers: (params?: { search?: string; role?: UserRole | '' }): Promise<User[]> => {
+      const qs = new URLSearchParams();
+      if (params?.search?.trim()) qs.set('search', params.search.trim());
+      if (params?.role) qs.set('role', params.role);
+      const query = qs.toString();
+      return request<User[]>(`/admin/users${query ? `?${query}` : ''}`);
+    },
+    createUser: (payload: AdminUserCreatePayload): Promise<User> =>
+      request<User>('/admin/users', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    updateUser: (userId: number, payload: AdminUserUpdatePayload): Promise<User> =>
+      request<User>(`/admin/users/${userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }),
+    deleteUser: (userId: number, force = false): Promise<void> =>
+      request<void>(`/admin/users/${userId}?force=${force ? 'true' : 'false'}`, {
+        method: 'DELETE',
+      }),
+    retryJob: (jobId: number): Promise<{ id: number; status: string }> =>
+      request<{ id: number; status: string }>(`/admin/jobs/${jobId}/retry`, {
+        method: 'POST',
+      }),
+    listCourses: (): Promise<AdminCourseItem[]> => request<AdminCourseItem[]>('/admin/courses'),
+    deleteCourse: (courseId: number): Promise<void> =>
+      request<void>(`/admin/courses/${courseId}`, { method: 'DELETE' }),
+    listClasses: (): Promise<AdminClassItem[]> => request<AdminClassItem[]>('/admin/classes'),
+    deleteClass: (classId: number): Promise<void> =>
+      request<void>(`/admin/classes/${classId}`, { method: 'DELETE' }),
+    getHealth: (): Promise<AdminSystemHealth> => request<AdminSystemHealth>('/admin/health'),
+  },
+
   courses: {
     list: async (): Promise<Course[]> => {
       try {
@@ -231,6 +274,8 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    remove: (courseId: number): Promise<void> =>
+      request<void>(`/courses/${courseId}`, { method: 'DELETE' }),
   },
 
   classes: {
@@ -253,6 +298,8 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }) as Promise<ClassCohort>,
+    remove: (courseId: number, classId: number): Promise<void> =>
+      request<void>(`/courses/${courseId}/classes/${classId}`, { method: 'DELETE' }),
   },
 
   assignments: {
@@ -288,6 +335,8 @@ export const api = {
       request<Assignment>(`/courses/${courseId}/classes/${classId}/assignments/${assignmentId}`, {
         method: 'PUT', body: JSON.stringify(data),
       }),
+    remove: (courseId: number, classId: number, assignmentId: number): Promise<void> =>
+      request<void>(`/courses/${courseId}/classes/${classId}/assignments/${assignmentId}`, { method: 'DELETE' }),
   },
 
   tests: {
@@ -396,6 +445,27 @@ export const api = {
         }
         throw err;
       }
+    },
+    deleteOne: async (
+      courseId: number,
+      classId: number,
+      assignmentId: number,
+      submissionId: number
+    ): Promise<void> => {
+      await request<void>(
+        `/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/submissions/${submissionId}`,
+        { method: 'DELETE' }
+      );
+    },
+    deleteAll: async (
+      courseId: number,
+      classId: number,
+      assignmentId: number
+    ): Promise<{ deleted_count: number }> => {
+      return await request<{ deleted_count: number }>(
+        `/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/submissions`,
+        { method: 'DELETE' }
+      );
     },
   },
 
@@ -614,7 +684,21 @@ export const api = {
           body: JSON.stringify(data),
         }
       ),
-    batchGenerate: (courseId: number, classId: number, assignmentId: number) =>
+    batchGenerate: (
+      courseId: number,
+      classId: number,
+      assignmentId: number
+    ): Promise<{
+      total_submissions: number;
+      generated_count: number;
+      failed_count: number;
+      results: Array<{
+        submission_id: number;
+        status: string;
+        grade_id?: number;
+        error?: string;
+      }>;
+    }> =>
       request(
         `/courses/${courseId}/classes/${classId}/assignments/${assignmentId}/submissions/batch-generate-feedback`,
         { method: 'POST' }

@@ -621,4 +621,262 @@ test.describe('Workstation UI/UX Polish & Ergonomics (R3)', () => {
     await closeBtn.click();
     await expect(settingsModal).not.toBeVisible();
   });
+
+  test('Tier 5: Workspace setup displays delete confirmation modal for course/class/assignment', async ({ page }) => {
+    await openWorkstation(page);
+
+    // Switch to Setup tab (starts at Courses drill-down level)
+    await page.getByRole('button', { name: /Set Up Course & Class/i }).click();
+
+    const manager = page.getByTestId('workspace-manager');
+    await expect(manager).toBeVisible();
+    await expect(page.getByTestId('open-create-course-btn')).toBeVisible();
+
+    // Drill down: Course -> Classes -> Assignments
+    await manager.locator('[data-testid^="course-card-"]').first().click();
+    await expect(page.getByTestId('open-create-class-btn')).toBeVisible();
+
+    await manager.locator('[data-testid^="class-card-"]').first().click();
+    await expect(page.getByTestId('open-create-assignment-btn')).toBeVisible();
+
+    // Verify per-item delete button opens confirmation modal
+    const deleteAssignmentBtn = manager.locator('[data-testid^="delete-assignment-"]').first();
+    await expect(deleteAssignmentBtn).toBeVisible();
+    await deleteAssignmentBtn.click();
+
+    const confirmModal = page.getByTestId('confirm-delete-modal');
+    await expect(confirmModal).toBeVisible();
+    await expect(confirmModal.getByText(/permanently deletes the assignment/i)).toBeVisible();
+
+    // Cancel and verify modal closes cleanly
+    await confirmModal.getByRole('button', { name: /^Cancel$/i }).click();
+    await expect(confirmModal).not.toBeVisible();
+  });
+
+  test('Tier 5: Admin user lands directly on isolated AdminDashboard with overview, users, governance and health tabs', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('token', 'mock-admin-jwt');
+    });
+
+    await page.route('**/api/v1/auth/me', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        json: {
+          id: 1,
+          email: 'admin@veripie.id.vn',
+          username: 'sys_admin',
+          full_name: 'System Admin',
+          role: 'admin',
+          is_active: true,
+          is_email_verified: true,
+          created_at: new Date().toISOString(),
+        },
+      });
+    });
+
+    await page.route('**/api/v1/admin/overview', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        json: {
+          total_users: 5,
+          users_by_role: { admin: 1, lecturer: 3, student: 1 },
+          total_courses: 2,
+          total_classes: 3,
+          total_assignments: 6,
+          total_submissions: 42,
+          jobs_by_status: { queued: 0, running: 0, completed: 40, failed: 2 },
+          recent_failed_jobs: [],
+        },
+      });
+    });
+
+    await page.route('**/api/v1/admin/users*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        json: [
+          {
+            id: 1,
+            email: 'admin@veripie.id.vn',
+            username: 'sys_admin',
+            full_name: 'System Admin',
+            role: 'admin',
+            is_active: true,
+            is_email_verified: true,
+            created_at: new Date().toISOString(),
+          },
+          {
+            id: 2,
+            email: 'lecturer@university.edu',
+            username: 'dr_minh',
+            full_name: 'Dr. Minh',
+            role: 'lecturer',
+            is_active: true,
+            is_email_verified: true,
+            created_at: new Date().toISOString(),
+          },
+        ],
+      });
+    });
+
+    await page.route('**/api/v1/admin/courses', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', json: [] });
+    });
+
+    await page.route('**/api/v1/admin/classes', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', json: [] });
+    });
+
+    await page.route('**/api/v1/admin/health', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        json: {
+          database_ok: true,
+          storage_ok: true,
+          worker_mode: 'subprocess',
+          queued_jobs: 0,
+          running_jobs: 0,
+          failed_jobs: 0,
+          checked_at: new Date().toISOString(),
+        },
+      });
+    });
+
+    await page.goto('/');
+    const adminDash = page.getByTestId('admin-dashboard-root');
+    await expect(adminDash).toBeVisible();
+    await expect(adminDash.getByText(/System Administration Dashboard/i)).toBeVisible();
+    await expect(adminDash.getByText(/Total Users/i)).toBeVisible();
+
+    await adminDash.getByRole('button', { name: /Users \(/i }).click();
+    await expect(adminDash.getByText(/@dr_minh/i)).toBeVisible();
+
+    await adminDash.getByRole('button', { name: /Worker & Health/i }).click();
+    await expect(adminDash.getByText(/Connected \(Healthy\)/i)).toBeVisible();
+  });
+
+  test('Tier 5: Quick-create modals auto-redirect from Course -> Class -> Assignment & Tests', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('token', 'mock-lecturer-jwt');
+    });
+
+    await page.route('**/api/v1/auth/me', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        json: {
+          id: 2,
+          email: 'lecturer@veripie.id.vn',
+          username: 'dr_khang',
+          full_name: 'Dr. Khang',
+          role: 'lecturer',
+          is_active: true,
+          is_email_verified: true,
+          created_at: new Date().toISOString(),
+        },
+      });
+    });
+
+    await page.route('**/api/v1/courses', async (route) => {
+      if (route.request().method() === 'POST') {
+        const body = JSON.parse(route.request().postData() || '{}');
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          json: {
+            id: 501,
+            code: body.code,
+            name: body.name,
+            instructor_id: 2,
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', json: [] });
+      }
+    });
+
+    await page.route('**/api/v1/courses/501/classes', async (route) => {
+      if (route.request().method() === 'POST') {
+        const body = JSON.parse(route.request().postData() || '{}');
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          json: {
+            id: 601,
+            course_id: 501,
+            code: body.code,
+            name: body.name,
+            semester: body.semester,
+            year: body.year,
+            is_active: true,
+            created_at: new Date().toISOString(),
+          },
+        });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', json: [] });
+      }
+    });
+
+    await page.route('**/api/v1/courses/501/classes/601/assignments', async (route) => {
+      if (route.request().method() === 'POST') {
+        const body = JSON.parse(route.request().postData() || '{}');
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          json: {
+            id: 701,
+            class_id: 601,
+            title: body.title,
+            description: body.description || '',
+            language: 'python',
+            status: body.status || 'draft',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', json: [] });
+      }
+    });
+
+    await page.route('**/api/v1/courses/501/classes/601/assignments/701/**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', json: [] });
+    });
+
+    await page.goto('/');
+
+    // 1. Starts on Setup tab at Courses level -> open Create Course modal
+    await page.getByTestId('open-create-course-btn').click();
+    const courseModal = page.getByTestId('create-course-modal');
+    await expect(courseModal).toBeVisible();
+    await courseModal.getByLabel('Course code').fill('CS1');
+    await courseModal.getByLabel('Course name').fill('Python Foundations');
+    await courseModal.getByRole('button', { name: 'Create course' }).click();
+
+    // 2. Auto-redirects into CS1 (Classes level) -> button changes to Create New Class
+    await expect(page.getByTestId('open-create-class-btn')).toBeVisible();
+    await page.getByTestId('open-create-class-btn').click();
+    const classModal = page.getByTestId('create-class-modal');
+    await expect(classModal).toBeVisible();
+    await classModal.getByLabel('Class code').fill('C01');
+    await classModal.getByLabel('Class name').fill('Class 01');
+    await classModal.getByRole('button', { name: 'Create class' }).click();
+
+    // 3. Auto-redirects into C01 (Assignments level) -> button changes to Create New Assignment
+    await expect(page.getByTestId('open-create-assignment-btn')).toBeVisible();
+    await page.getByTestId('open-create-assignment-btn').click();
+    const asgModal = page.getByTestId('create-assignment-modal');
+    await expect(asgModal).toBeVisible();
+    await asgModal.getByLabel('Assignment title').fill('HW1 Loops');
+    await asgModal.getByRole('button', { name: 'Create assignment' }).click();
+
+    // 4. Auto-redirects straight to Assignment & Tests tab for HW1 Loops
+    await expect(page.getByLabel('Title', { exact: true })).toHaveValue('HW1 Loops');
+  });
 });

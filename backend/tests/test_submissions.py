@@ -224,3 +224,124 @@ def test_cross_student_submission_isolation(
         headers=auth_headers(lecturer_token_2),
     )
     assert lec2_source.status_code == 403
+
+
+def test_duplicate_and_reupload_submission_handling(
+    client: TestClient,
+    lecturer_token: str,
+    student_token: str,
+    student_user: User,
+) -> None:
+    c_id, cl_id, a_id = setup_test_assignment(client, lecturer_token, student_user)
+
+    # First upload
+    res1 = client.post(
+        f"/api/v1/courses/{c_id}/classes/{cl_id}/assignments/{a_id}/submissions",
+        headers=auth_headers(student_token),
+        files={"file": ("solution.py", io.BytesIO(b"def f(): return 1\n"), "text/x-python")},
+    )
+    assert res1.status_code == 201
+    data1 = res1.json()
+    assert data1["dedup_status"] == "imported"
+
+    # Re-upload exact same content -> skipped_duplicate, same submission id
+    res2 = client.post(
+        f"/api/v1/courses/{c_id}/classes/{cl_id}/assignments/{a_id}/submissions",
+        headers=auth_headers(student_token),
+        files={"file": ("solution.py", io.BytesIO(b"def f(): return 1\n"), "text/x-python")},
+    )
+    assert res2.status_code == 201
+    data2 = res2.json()
+    assert data2["id"] == data1["id"]
+    assert data2["dedup_status"] == "skipped_duplicate"
+
+    # Re-upload modified content -> updated, same submission id, new sha256
+    res3 = client.post(
+        f"/api/v1/courses/{c_id}/classes/{cl_id}/assignments/{a_id}/submissions",
+        headers=auth_headers(student_token),
+        files={"file": ("solution_v2.py", io.BytesIO(b"def f(): return 2\n"), "text/x-python")},
+    )
+    assert res3.status_code == 201
+    data3 = res3.json()
+    assert data3["id"] == data1["id"]
+    assert data3["dedup_status"] == "updated"
+    assert data3["sha256"] != data1["sha256"]
+    assert data3["original_filename"] == "solution_v2.py"
+
+    # Total submissions for this assignment should still be 1
+    list_res = client.get(
+        f"/api/v1/courses/{c_id}/classes/{cl_id}/assignments/{a_id}/submissions",
+        headers=auth_headers(student_token),
+    )
+    assert list_res.status_code == 200
+    assert len(list_res.json()) == 1
+
+
+def test_delete_single_and_all_submissions(
+    client: TestClient,
+    lecturer_token: str,
+    student_token: str,
+    student_token_2: str,
+    student_user: User,
+    student_user_2: User,
+) -> None:
+    c_id, cl_id, a_id = setup_test_assignment(client, lecturer_token, student_user)
+
+    # Enroll second student
+    client.post(
+        f"/api/v1/courses/{c_id}/classes/{cl_id}/memberships",
+        headers=auth_headers(lecturer_token),
+        json={"user_id": student_user_2.id},
+    )
+
+    # Upload 2 submissions
+    r1 = client.post(
+        f"/api/v1/courses/{c_id}/classes/{cl_id}/assignments/{a_id}/submissions",
+        headers=auth_headers(student_token),
+        files={"file": ("s1.py", io.BytesIO(b"def f(): return 1\n"), "text/x-python")},
+    )
+    assert r1.status_code == 201
+    sub1_id = r1.json()["id"]
+
+    r2 = client.post(
+        f"/api/v1/courses/{c_id}/classes/{cl_id}/assignments/{a_id}/submissions",
+        headers=auth_headers(student_token_2),
+        files={"file": ("s2.py", io.BytesIO(b"def f(): return 2\n"), "text/x-python")},
+    )
+    assert r2.status_code == 201
+
+    # Student cannot delete submission
+    del_forbidden = client.delete(
+        f"/api/v1/courses/{c_id}/classes/{cl_id}/assignments/{a_id}/submissions/{sub1_id}",
+        headers=auth_headers(student_token),
+    )
+    assert del_forbidden.status_code == 403
+
+    # Lecturer deletes single submission
+    del_one = client.delete(
+        f"/api/v1/courses/{c_id}/classes/{cl_id}/assignments/{a_id}/submissions/{sub1_id}",
+        headers=auth_headers(lecturer_token),
+    )
+    assert del_one.status_code == 204
+
+    list_after_one = client.get(
+        f"/api/v1/courses/{c_id}/classes/{cl_id}/assignments/{a_id}/submissions",
+        headers=auth_headers(lecturer_token),
+    )
+    assert list_after_one.status_code == 200
+    assert len(list_after_one.json()) == 1
+
+    # Clear All removes the remaining submission
+    del_all = client.delete(
+        f"/api/v1/courses/{c_id}/classes/{cl_id}/assignments/{a_id}/submissions",
+        headers=auth_headers(lecturer_token),
+    )
+    assert del_all.status_code == 200
+    assert del_all.json()["deleted_count"] == 1
+
+    list_after_all = client.get(
+        f"/api/v1/courses/{c_id}/classes/{cl_id}/assignments/{a_id}/submissions",
+        headers=auth_headers(lecturer_token),
+    )
+    assert list_after_all.status_code == 200
+    assert len(list_after_all.json()) == 0

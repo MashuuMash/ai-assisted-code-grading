@@ -10,17 +10,23 @@ import { useAuth } from '../context/AuthContext';
 import { demoUser } from '../data/demoFixtures';
 import { ThemeToggle } from './ThemeToggle';
 import { SettingsModal } from './SettingsModal';
+import { AdminConsoleModal } from './AdminConsoleModal';
 
 export interface NavbarProps {
   onOpenShortcuts?: () => void;
+  hideAdminConsoleModalItem?: boolean;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ onOpenShortcuts }) => {
+export const Navbar: React.FC<NavbarProps> = ({
+  onOpenShortcuts,
+  hideAdminConsoleModalItem = false,
+}) => {
   const { user: authUser, logout } = useAuth();
   const isDemo = typeof window !== 'undefined' && localStorage.getItem('is_demo_mode') === 'true';
   const user = authUser || (isDemo ? demoUser : null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -137,6 +143,21 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenShortcuts }) => {
 
                   {/* Menu Items */}
                   <div className="p-1 space-y-0.5">
+                    {user.role === 'admin' && !hideAdminConsoleModalItem && (
+                      <button
+                        type="button"
+                        data-testid="menu-item-admin"
+                        onClick={() => {
+                          setIsDropdownOpen(false);
+                          setIsAdminOpen(true);
+                        }}
+                        className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-semibold hover:bg-[#FCF0DA]/60 dark:hover:bg-[#2C2623] text-[#4C4541] dark:text-[#FCF0DA] transition-colors cursor-pointer text-left"
+                      >
+                        <ShieldCheck className="w-4 h-4 text-[#F2C46A]" />
+                        <span>Admin Console</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       data-testid="menu-item-settings"
@@ -177,6 +198,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenShortcuts }) => {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         user={user}
+      />
+
+      {/* Admin Console Modal */}
+      <AdminConsoleModal
+        isOpen={isAdminOpen}
+        onClose={() => setIsAdminOpen(false)}
+        currentUser={user}
       />
     </>
   );

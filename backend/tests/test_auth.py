@@ -90,6 +90,22 @@ def test_login_nonexistent_user(client: TestClient) -> None:
     assert response.status_code == 401
 
 
+def test_login_inactive_account_includes_contact_email(
+    client: TestClient, db, student_user: User
+) -> None:
+    student_user.is_active = False
+    db.commit()
+
+    response = client.post(
+        "/api/v1/auth/login/json",
+        json={"username_or_email": student_user.email, "password": "StudentPass123!"},
+    )
+    assert response.status_code == 403
+    detail = response.json()["detail"]
+    assert "deactivated" in detail.lower()
+    assert "@" in detail
+
+
 def test_get_me_success(client: TestClient, student_token: str, student_user: User) -> None:
     response = client.get("/api/v1/auth/me", headers=auth_headers(student_token))
     assert response.status_code == 200

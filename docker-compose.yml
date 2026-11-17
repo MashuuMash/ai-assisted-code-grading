@@ -37,6 +37,7 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-VeriPie Instructor Workstation}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
       OTP_EXPIRE_MINUTES: ${OTP_EXPIRE_MINUTES:-10}
     depends_on:
       postgres:

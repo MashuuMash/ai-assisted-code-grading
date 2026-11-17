@@ -13,6 +13,8 @@ import { DetailedFeedbackPayload, SubmissionGrade } from '../types';
 interface FeedbackDraftEditorProps {
   grade: SubmissionGrade | null;
   onGenerate: () => Promise<void>;
+  onBatchGenerate?: () => Promise<{ generated_count: number; total_submissions: number } | void>;
+  batchLoading?: boolean;
   onSaveFeedback: (summary: string, detailed?: any, asConfirmed?: boolean) => Promise<void>;
   onSelectEvidence?: (evidenceId: string) => void;
 }
@@ -20,6 +22,8 @@ interface FeedbackDraftEditorProps {
 export const FeedbackDraftEditor: React.FC<FeedbackDraftEditorProps> = ({
   grade,
   onGenerate,
+  onBatchGenerate,
+  batchLoading = false,
   onSaveFeedback,
   onSelectEvidence,
 }) => {
@@ -50,6 +54,26 @@ export const FeedbackDraftEditor: React.FC<FeedbackDraftEditorProps> = ({
       setError(err instanceof Error ? err.message : 'Could not generate feedback. Please retry.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBatchGenerateClick = async () => {
+    if (!onBatchGenerate) return;
+    setError('');
+    setNotice('');
+    try {
+      const res = await onBatchGenerate();
+      if (res) {
+        setNotice(
+          `Batch feedback generated for ${res.generated_count}/${res.total_submissions} submissions (confirmed grades preserved).`
+        );
+      } else {
+        setNotice('Batch feedback generated for all draft/ungraded submissions.');
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Could not batch-generate feedback. Please retry.'
+      );
     }
   };
 
@@ -99,15 +123,30 @@ export const FeedbackDraftEditor: React.FC<FeedbackDraftEditorProps> = ({
           )}
         </div>
 
-        <button
-          onClick={handleGenerateClick}
-          disabled={loading || saving || isEditing || !grade}
-          className="px-2.5 py-1 bg-[#F2C46A] hover:bg-[#F2C46A]/90 text-[#4C4541] rounded-lg text-xs font-bold inline-flex items-center space-x-1.5 transition-colors border border-[#AEAC78]/60 shadow-xs cursor-pointer disabled:opacity-50"
-          title="Generate feedback from evidence; uses rule-based fallback when AI is unavailable"
-        >
-          <Sparkles className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          <span>{loading ? 'Generating...' : 'Generate Feedback'}</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {onBatchGenerate && (
+            <button
+              type="button"
+              onClick={handleBatchGenerateClick}
+              disabled={loading || batchLoading || saving || isEditing}
+              className="px-2.5 py-1 bg-[#FCF0DA] dark:bg-[#2C2623] hover:bg-[#F2C46A]/25 text-[#4C4541] dark:text-[#F2C46A] rounded-lg text-xs font-bold inline-flex items-center space-x-1 transition-colors border border-[#AEAC78]/60 shadow-xs cursor-pointer disabled:opacity-50"
+              title="Generate draft feedback for all unconfirmed submissions in this assignment"
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${batchLoading ? 'animate-spin' : ''}`} />
+              <span>{batchLoading ? 'Batching...' : 'Generate All'}</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleGenerateClick}
+            disabled={loading || batchLoading || saving || isEditing || !grade}
+            className="px-2.5 py-1 bg-[#F2C46A] hover:bg-[#F2C46A]/90 text-[#4C4541] rounded-lg text-xs font-bold inline-flex items-center space-x-1.5 transition-colors border border-[#AEAC78]/60 shadow-xs cursor-pointer disabled:opacity-50"
+            title="Generate feedback for this submission from evidence"
+          >
+            <Sparkles className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>{loading ? 'Generating...' : 'Generate Feedback'}</span>
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 flex flex-col min-h-0 pt-3 space-y-3">

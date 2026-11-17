@@ -131,20 +131,32 @@ export const BatchIngestModal: React.FC<BatchIngestModalProps> = ({
           {/* Results Display */}
           {result && (
             <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-2">
-                <div className="p-2.5 bg-[#FCF0DA] dark:bg-[#2C2623] border border-[#AEAC78]/40 rounded-lg text-center">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                <div className="p-2 bg-[#FCF0DA] dark:bg-[#2C2623] border border-[#AEAC78]/40 rounded-lg text-center">
                   <span className="text-[10px] uppercase font-bold text-[#4C4541] dark:text-[#FCF0DA]">Found</span>
                   <div className="text-base font-black text-[#4C4541] dark:text-[#FCF0DA] font-mono mt-0.5">
                     {result.total_found}
                   </div>
                 </div>
-                <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-lg text-center">
-                  <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-300">Submissions</span>
+                <div className="p-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-lg text-center">
+                  <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-300">Imported</span>
                   <div className="text-base font-black text-emerald-800 dark:text-emerald-200 font-mono mt-0.5">
                     {result.imported_count}
                   </div>
                 </div>
-                <div className="p-2.5 bg-[#FCF0DA]/40 dark:bg-[#2C2623]/40 border border-[#AEAC78]/40 rounded-lg text-center">
+                <div className="p-2 bg-sky-50 dark:bg-sky-950/40 border border-sky-300 dark:border-sky-800 rounded-lg text-center">
+                  <span className="text-[10px] uppercase font-bold text-sky-700 dark:text-sky-300">Updated</span>
+                  <div className="text-base font-black text-sky-800 dark:text-sky-200 font-mono mt-0.5">
+                    {result.updated_count ?? 0}
+                  </div>
+                </div>
+                <div className="p-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-lg text-center">
+                  <span className="text-[10px] uppercase font-bold text-amber-700 dark:text-amber-300">Skipped</span>
+                  <div className="text-base font-black text-amber-800 dark:text-amber-200 font-mono mt-0.5">
+                    {result.skipped_count ?? 0}
+                  </div>
+                </div>
+                <div className="p-2 bg-[#FCF0DA]/40 dark:bg-[#2C2623]/40 border border-[#AEAC78]/40 rounded-lg text-center">
                   <span className="text-[10px] uppercase font-bold text-[#AEAC78]">Failed</span>
                   <div className="text-base font-black text-[#4C4541] dark:text-[#FCF0DA] font-mono mt-0.5">
                     {result.failed_count}
@@ -159,26 +171,49 @@ export const BatchIngestModal: React.FC<BatchIngestModalProps> = ({
                     <tr>
                       <th className="px-2.5 py-1.5 text-left">Student ID</th>
                       <th className="px-2.5 py-1.5 text-left">Filename</th>
-                      <th className="px-2.5 py-1.5 text-center">Grading</th>
+                      <th className="px-2.5 py-1.5 text-center">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#AEAC78]/20 font-mono">
-                    {result.submissions.map((r) => (
-                      <tr key={r.submission_id} className="hover:bg-[#FCF0DA]/30 dark:hover:bg-[#2C2623]/40 transition-colors">
-                        <td className="px-2.5 py-1 text-[#4C4541] dark:text-[#FCF0DA] font-semibold">{r.student_identifier}</td>
-                        <td className="px-2.5 py-1 text-[#AEAC78] truncate max-w-[200px]">{r.filename}</td>
-                        <td className="px-2.5 py-1 text-center">
-                          <span
-                            className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200"
-                          >
-                            {r.job_id ? 'Queued' : 'Imported'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {result.submissions.map((r, idx) => {
+                      const action = r.action || 'imported';
+                      const badgeClass =
+                        action === 'skipped'
+                          ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200'
+                          : action === 'updated'
+                            ? 'bg-sky-100 dark:bg-sky-900/50 text-sky-800 dark:text-sky-200'
+                            : 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200';
+                      const badgeText =
+                        action === 'skipped'
+                          ? 'Skipped (Dup)'
+                          : action === 'updated'
+                            ? 'Updated + Queued'
+                            : r.job_id
+                              ? 'Queued'
+                              : 'Imported';
+                      return (
+                        <tr key={`${r.submission_id}-${idx}`} className="hover:bg-[#FCF0DA]/30 dark:hover:bg-[#2C2623]/40 transition-colors">
+                          <td className="px-2.5 py-1 text-[#4C4541] dark:text-[#FCF0DA] font-semibold">{r.student_identifier}</td>
+                          <td className="px-2.5 py-1 text-[#AEAC78] truncate max-w-[200px]">{r.filename}</td>
+                          <td className="px-2.5 py-1 text-center">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${badgeClass}`}>
+                              {badgeText}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
+              {result.skipped && result.skipped.length > 0 && (
+                <div className="rounded-lg border border-amber-300/70 dark:border-amber-800/70 bg-amber-50/70 dark:bg-amber-950/30 p-2.5 text-amber-800 dark:text-amber-200 max-h-24 overflow-y-auto">
+                  <p className="font-semibold">Unchanged duplicate files skipped ({result.skipped.length})</p>
+                  <ul className="mt-1 list-disc pl-4 space-y-0.5">
+                    {result.skipped.map((message, index) => <li key={index}>{message}</li>)}
+                  </ul>
+                </div>
+              )}
               {result.errors.length > 0 && (
                 <div role="alert" className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3 text-amber-800 dark:text-amber-200">
                   <p className="font-semibold">Files that could not be imported</p>

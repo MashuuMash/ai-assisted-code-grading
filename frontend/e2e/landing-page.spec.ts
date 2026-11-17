@@ -551,5 +551,31 @@ test.describe('Showcase Landing Page (R1)', () => {
     await expect(modal).not.toBeVisible();
     await expect(page.getByTestId('workstation-dashboard')).toBeVisible();
   });
+
+  test('Tier 3: Deactivated user login shows contact email notice below Sign In button', async ({ page }) => {
+    await page.route('**/api/v1/auth/login/json', async (route) => {
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          detail: 'Account is deactivated. Please contact admin@veripie.id.vn to reactivate your account.',
+        }),
+      });
+    });
+
+    await page.goto('/');
+    await page.getByRole('button', { name: /^Sign In$/i }).first().click();
+
+    const modal = page.getByTestId('login-modal');
+    await expect(modal).toBeVisible();
+
+    await modal.locator('input[type="text"]').first().fill('locked_lecturer');
+    await modal.locator('input[type="password"]').first().fill('StrongPass123!');
+    await modal.getByRole('button', { name: /Sign In to Workstation/i }).click();
+
+    const notice = modal.getByTestId('inactive-account-notice');
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText('admin@veripie.id.vn');
+  });
 });
 

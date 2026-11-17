@@ -10,6 +10,7 @@ from app.auth import get_current_user
 from app.authorization import can_manage_class, can_view_class
 from app.batch_ingestion import MAX_ZIP_SIZE, ingest_batch_zip
 from app.database import get_db
+from app.deletion import purge_assignment, purge_submission
 from app.models import (
     Assignment,
     AssignmentStatus,
@@ -189,11 +190,7 @@ def delete_assignment(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     assignment = get_assignment_or_404(class_id, assignment_id, db)
-    storage = SubmissionStorage()
-    for sub in assignment.submissions:
-        storage.delete(sub.storage_key)
-
-    db.delete(assignment)
+    purge_assignment(db, assignment)
     db.commit()
 
 
@@ -242,6 +239,45 @@ async def submit_assignment(
     storage = SubmissionStorage()
     stored = await storage.store(file)
 
+    existing = db.scalar(
+        select(Submission)
+        .where(
+            Submission.assignment_id == assignment_id,
+            Submission.student_id == current_user.id,
+        )
+        .order_by(Submission.submitted_at.desc())
+    )
+
+    if existing is not None:
+        if existing.sha256 == stored.sha256:
+            if stored.storage_key != existing.storage_key:
+                still_used = db.scalar(
+                    select(Submission.id).where(Submission.storage_key == stored.storage_key).limit(1)
+                )
+                if still_used is None:
+                    storage.delete(stored.storage_key)
+            return SubmissionResponse.model_validate(existing).model_copy(
+                update={"dedup_status": "skipped_duplicate"}
+            )
+
+        old_key = existing.storage_key
+        existing.original_filename = stored.original_filename
+        existing.storage_key = stored.storage_key
+        existing.size_bytes = stored.size_bytes
+        existing.sha256 = stored.sha256
+        existing.submitted_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(existing)
+        if old_key != stored.storage_key:
+            still_used = db.scalar(
+                select(Submission.id).where(Submission.storage_key == old_key).limit(1)
+            )
+            if still_used is None:
+                storage.delete(old_key)
+        return SubmissionResponse.model_validate(existing).model_copy(
+            update={"dedup_status": "updated"}
+        )
+
     submission = Submission(
         assignment_id=assignment_id,
         student_id=current_user.id,
@@ -253,7 +289,9 @@ async def submit_assignment(
     db.add(submission)
     db.commit()
     db.refresh(submission)
-    return submission
+    return SubmissionResponse.model_validate(submission).model_copy(
+        update={"dedup_status": "imported"}
+    )
 
 
 @router.get("/{assignment_id}/submissions", response_model=list[SubmissionResponse])
@@ -437,3 +475,59 @@ def get_submission_evidence(
         ).all()
     )
     return records
+
+
+@router.delete(
+    "/{assignment_id}/submissions/{submission_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_submission(
+    course_id: int,
+    class_id: int,
+    assignment_id: int,
+    submission_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> None:
+    cohort = get_class_or_404(course_id, class_id, db)
+    if not can_manage_class(current_user, cohort):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    _ = get_assignment_or_404(class_id, assignment_id, db)
+    submission = db.scalar(
+        select(Submission).where(
+            Submission.id == submission_id, Submission.assignment_id == assignment_id
+        )
+    )
+    if not submission:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+    purge_submission(db, submission)
+    db.commit()
+
+
+@router.delete("/{assignment_id}/submissions")
+def delete_all_submissions(
+    course_id: int,
+    class_id: int,
+    assignment_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict[str, int]:
+    cohort = get_class_or_404(course_id, class_id, db)
+    if not can_manage_class(current_user, cohort):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    assignment = get_assignment_or_404(class_id, assignment_id, db)
+    for report in list(assignment.similarity_reports):
+        db.delete(report)
+    db.flush()
+
+    subs = list(
+        db.scalars(select(Submission).where(Submission.assignment_id == assignment_id)).all()
+    )
+    deleted_count = len(subs)
+    for sub in subs:
+        purge_submission(db, sub)
+    db.commit()
+    return {"deleted_count": deleted_count}

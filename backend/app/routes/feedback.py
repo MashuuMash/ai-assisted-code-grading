@@ -255,6 +255,19 @@ def batch_generate_feedback(
     results: list[dict] = []
 
     for sub in submissions:
+        existing_grade = db.scalar(
+            select(SubmissionGrade).where(SubmissionGrade.submission_id == sub.id)
+        )
+        if existing_grade and existing_grade.status == GradeStatus.CONFIRMED:
+            results.append(
+                {
+                    "submission_id": sub.id,
+                    "status": "skipped_confirmed",
+                    "grade_id": existing_grade.id,
+                }
+            )
+            continue
+
         try:
             grade = generate_feedback_for_submission(
                 submission_id=sub.id,

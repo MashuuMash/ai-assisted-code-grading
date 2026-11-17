@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
+from app.routes.admin import router as admin_router
 from app.routes.ai_detector import router as ai_detector_router
 from app.routes.assignments import router as assignments_router
 from app.routes.auth import router as auth_router
@@ -38,6 +39,7 @@ app.include_router(rubrics_router, prefix="/api/v1")
 app.include_router(similarity_router, prefix="/api/v1")
 app.include_router(feedback_router, prefix="/api/v1")
 app.include_router(ai_detector_router, prefix="/api/v1")
+app.include_router(admin_router, prefix="/api/v1")
 app.include_router(demo_router, prefix="/api/v1")
 
 

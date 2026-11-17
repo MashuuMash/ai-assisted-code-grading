@@ -279,10 +279,11 @@ def solve(data):
     # 3 submissions -> 3 pairwise comparisons: (1, 2), (1, 3), (2, 3)
     assert len(comparisons) == 3
 
-    # The pair between sub1 and sub2 should be ranked highest
+    # The pair between sub1 and sub2 should be ranked highest and auto-flagged (>= 50% threshold)
     top_pair = comparisons[0]
     assert top_pair["similarity_percentage"] >= 80.0
-    assert top_pair["status"] == "unreviewed"
+    assert top_pair["status"] == "flagged"
+    assert "Auto-flagged" in (top_pair.get("review_notes") or "")
     comp_id = top_pair["id"]
 
     # 8. Lecturer review: Flag candidate comparison

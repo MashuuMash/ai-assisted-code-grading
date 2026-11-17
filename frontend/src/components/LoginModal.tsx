@@ -54,6 +54,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
   const [showResetPassword, setShowResetPassword] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
+  const [inactiveContactEmail, setInactiveContactEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -98,6 +99,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
   const switchMode = (nextMode: LoginModalMode) => {
     setMode(nextMode);
     setError(null);
+    setInactiveContactEmail(null);
     setInfoMessage(null);
   };
 
@@ -145,6 +147,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
   const handleResendOtp = async () => {
     if (resendCooldown > 0 || loading) return;
     setError(null);
+    setInactiveContactEmail(null);
     setInfoMessage(null);
     setLoading(true);
     try {
@@ -270,6 +273,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
     }
 
     setLoading(true);
+    setError(null);
+    setInactiveContactEmail(null);
     try {
       if (mode === 'login') {
         await login(username, password);
@@ -312,6 +317,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
         } catch {
           // ignore
         }
+      } else if (mode === 'login' && /inactive|deactivat/i.test(msg)) {
+        const matchedEmail = msg.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)?.[0];
+        setInactiveContactEmail(matchedEmail || 'admin@veripie.id.vn');
       } else {
         setError(msg);
       }
@@ -335,16 +343,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
         {/* Left Column: Visual Brand & Academic Identity */}
         <div className="hidden md:flex md:col-span-5 bg-[#FCF0DA] dark:bg-[#2C2623] p-7 flex-col justify-between border-r border-[#AEAC78]/40">
           <div>
-            <div className="flex items-center space-x-2.5">
+            <div className="flex items-center">
               <img
                 src="/logo.png"
                 alt="VeriPie"
                 className="h-9 w-auto object-contain"
               />
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#F2C46A]/35 text-[#4C4541] dark:text-[#F2C46A] border border-[#AEAC78]/50">
-                <ShieldCheck className="w-3 h-3" />
-                <span>Faculty Portal</span>
-              </span>
             </div>
             <p className="mt-2 text-xs text-[#6B625B] dark:text-[#D8CEBA] font-medium leading-relaxed">
               Automated Python Evaluation &amp; Deterministic Evidence Workstation.
@@ -876,6 +880,21 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                         </div>
                       </div>
                     )}
+
+                    {mode === 'register' && confirmPassword && (
+                      <p
+                        className={`sm:col-span-2 text-[11px] font-semibold flex items-center space-x-1 ${
+                          password === confirmPassword
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-rose-600 dark:text-rose-400'
+                        }`}
+                      >
+                        {password === confirmPassword && <Check className="w-3 h-3" />}
+                        <span>
+                          {password === confirmPassword ? 'Passwords match' : 'Passwords do not match'}
+                        </span>
+                      </p>
+                    )}
                   </div>
 
                   <button
@@ -894,6 +913,23 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                         : 'Create Instructor Account'}
                     </span>
                   </button>
+
+                  {mode === 'login' && inactiveContactEmail && (
+                    <p
+                      role="alert"
+                      data-testid="inactive-account-notice"
+                      className="mt-2.5 text-center text-[11px] leading-relaxed text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/70 rounded-lg px-3 py-2"
+                    >
+                      Your account has been deactivated. Please contact{' '}
+                      <a
+                        href={`mailto:${inactiveContactEmail}`}
+                        className="font-bold underline hover:text-rose-800 dark:hover:text-rose-200"
+                      >
+                        {inactiveContactEmail}
+                      </a>{' '}
+                      to request reactivation.
+                    </p>
+                  )}
                 </>
               )}
             </form>

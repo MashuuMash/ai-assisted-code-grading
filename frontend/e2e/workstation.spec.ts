@@ -16,12 +16,15 @@ test('instructor creates workspace, edits tests, imports, grades, reruns and exp
   await page.getByPlaceholder('Enter password').fill(password);
   await page.getByTestId('login-modal').getByRole('button', { name: 'Sign In to Workstation' }).click();
   await page.getByRole('button', { name: 'Set Up Course & Class' }).click();
+  await page.getByTestId('open-create-course-btn').click();
   await page.getByLabel('Course code', { exact: true }).fill(`E2E-${Date.now()}`);
   await page.getByLabel('Course name', { exact: true }).fill('Browser acceptance');
   await page.getByRole('button', { name: 'Create course', exact: true }).click();
+  await page.getByTestId('open-create-class-btn').click();
   await page.getByLabel('Class code', { exact: true }).fill('E2E01');
   await page.getByLabel('Class name', { exact: true }).fill('Browser class');
   await page.getByRole('button', { name: 'Create class', exact: true }).click();
+  await page.getByTestId('open-create-assignment-btn').click();
   await page.getByLabel('Assignment title', { exact: true }).fill('Addition');
   await page.getByRole('button', { name: 'Create assignment', exact: true }).click();
   await page.getByLabel('Title', { exact: true }).fill('Addition revised');

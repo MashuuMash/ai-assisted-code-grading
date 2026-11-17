@@ -6,11 +6,11 @@ import {
   Flag,
   Play,
   ShieldAlert,
-  X,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { getDemoSubmissionCode } from '../data/demoFixtures';
 import { ComparisonReviewStatus, SimilarityComparison, SimilarityReport, Submission } from '../types';
+import { SimilarityCompareModal } from './SimilarityCompareModal';
 
 interface SimilarityWorkbenchProps {
   courseId: number;
@@ -33,7 +33,7 @@ export const SimilarityWorkbench: React.FC<SimilarityWorkbenchProps> = ({
   const [running, setRunning] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
-  const [activeDiffCompId, setActiveDiffCompId] = useState<number | null>(null);
+  const [modalCompId, setModalCompId] = useState<number | null>(null);
   const [diffCodes, setDiffCodes] = useState<{ codeA: string; codeB: string; loading: boolean }>({
     codeA: '',
     codeB: '',
@@ -46,12 +46,8 @@ export const SimilarityWorkbench: React.FC<SimilarityWorkbenchProps> = ({
     return found?.student_name ? `${found.student_name} (#${subId})` : `Submission #${subId}`;
   };
 
-  const handleToggleDiff = async (comp: SimilarityComparison) => {
-    if (activeDiffCompId === comp.id) {
-      setActiveDiffCompId(null);
-      return;
-    }
-    setActiveDiffCompId(comp.id);
+  const handleOpenCompareModal = async (comp: SimilarityComparison) => {
+    setModalCompId(comp.id);
     setDiffCodes({ codeA: '', codeB: '', loading: true });
     try {
       const [codeA, codeB] = await Promise.all([
@@ -251,20 +247,13 @@ export const SimilarityWorkbench: React.FC<SimilarityWorkbenchProps> = ({
             const isMedium = pct >= 40 && pct < 70;
             const isActionBusy = actionLoading === comp.id;
 
-            const isDiffOpen = activeDiffCompId === comp.id;
             const customNote = draftNotes[comp.id] ?? '';
-            const isLineInRegions = (lineNo: number, side: 'a' | 'b') => {
-              if (!comp.matched_regions || comp.matched_regions.length === 0) return true;
-              return comp.matched_regions.some((reg) => {
-                const span = side === 'a' ? reg.lines_a : reg.lines_b;
-                return lineNo >= span[0] && lineNo <= span[1];
-              });
-            };
 
             return (
               <div
                 key={comp.id}
-                className="p-3 rounded-lg border border-[#AEAC78]/40 dark:border-[#AEAC78]/30 bg-[#FCF0DA]/20 dark:bg-[#2C2623]/60 hover:border-[#AEAC78] transition-colors text-[#4C4541] dark:text-[#FCF0DA]"
+                onClick={() => handleOpenCompareModal(comp)}
+                className="p-3 rounded-lg border border-[#AEAC78]/40 dark:border-[#AEAC78]/30 bg-[#FCF0DA]/20 dark:bg-[#2C2623]/60 hover:border-[#F2C46A] transition-colors text-[#4C4541] dark:text-[#FCF0DA] cursor-pointer"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-3">
@@ -319,27 +308,27 @@ export const SimilarityWorkbench: React.FC<SimilarityWorkbenchProps> = ({
 
                     <button
                       type="button"
-                      onClick={() => handleToggleDiff(comp)}
-                      className={`px-2 py-1 rounded border text-[11px] font-bold inline-flex items-center gap-1 transition-colors cursor-pointer ${
-                        isDiffOpen
-                          ? 'bg-[#4C4541] text-[#FCF0DA] border-[#4C4541]'
-                          : 'bg-[#FFFDF9] dark:bg-[#38322E] hover:bg-[#F2C46A]/30 text-[#4C4541] dark:text-[#FCF0DA] border-[#AEAC78]/50'
-                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenCompareModal(comp);
+                      }}
+                      className="px-2 py-1 rounded border text-[11px] font-bold inline-flex items-center gap-1 transition-colors cursor-pointer bg-[#FFFDF9] dark:bg-[#38322E] hover:bg-[#F2C46A]/30 text-[#4C4541] dark:text-[#FCF0DA] border-[#AEAC78]/50"
                       title="Compare Submission A and Submission B side-by-side"
                     >
-                      {isDiffOpen ? <X className="w-3 h-3" /> : <Columns className="w-3 h-3" />}
-                      <span>{isDiffOpen ? 'Close Diff' : 'Compare Side-by-Side'}</span>
+                      <Columns className="w-3 h-3" />
+                      <span>Compare Modal</span>
                     </button>
 
                     {/* Review action buttons */}
                     <button
-                      onClick={() =>
+                      onClick={(e) => {
+                        e.stopPropagation();
                         handleReview(
                           comp.id,
                           'flagged',
                           customNote.trim() || 'Flagged for academic review'
-                        )
-                      }
+                        );
+                      }}
                       disabled={isActionBusy}
                       className="p-1 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 rounded border border-rose-200 dark:border-rose-800 transition-colors cursor-pointer"
                       title="Flag candidate pair for investigation"
@@ -348,13 +337,14 @@ export const SimilarityWorkbench: React.FC<SimilarityWorkbenchProps> = ({
                     </button>
 
                     <button
-                      onClick={() =>
+                      onClick={(e) => {
+                        e.stopPropagation();
                         handleReview(
                           comp.id,
                           'dismissed',
                           customNote.trim() || 'Verified false positive'
-                        )
-                      }
+                        );
+                      }}
                       disabled={isActionBusy}
                       className="p-1 hover:bg-[#FCF0DA] dark:hover:bg-[#38322E] text-[#4C4541] dark:text-[#FCF0DA] rounded border border-[#AEAC78]/40 transition-colors cursor-pointer"
                       title="Dismiss match as false positive"
@@ -364,7 +354,10 @@ export const SimilarityWorkbench: React.FC<SimilarityWorkbenchProps> = ({
 
                     {onSelectSubmissions && (
                       <button
-                        onClick={() => onSelectSubmissions(comp.submission_a_id, comp.submission_b_id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectSubmissions(comp.submission_a_id, comp.submission_b_id);
+                        }}
                         className="p-1 hover:bg-[#F2C46A]/20 text-[#4C4541] dark:text-[#FCF0DA] rounded border border-[#AEAC78]/40 transition-colors cursor-pointer"
                         title="View submissions"
                       >
@@ -393,117 +386,28 @@ export const SimilarityWorkbench: React.FC<SimilarityWorkbenchProps> = ({
                   </div>
                 )}
 
-                {/* Inline Side-by-Side Code Comparison Diff View */}
-                {isDiffOpen && (
-                  <div className="mt-3 rounded-xl border border-[#AEAC78]/50 bg-[#241F1C] text-[#FCF0DA] overflow-hidden shadow-md">
-                    <div className="bg-[#312B27] px-3 py-2 border-b border-[#AEAC78]/25 flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                      <span className="font-mono font-bold text-[#F2C46A]">
-                        Side-by-Side Structural Comparison ({pct.toFixed(1)}% Overlap)
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={customNote}
-                          onChange={(e) =>
-                            setDraftNotes((prev) => ({ ...prev, [comp.id]: e.target.value }))
-                          }
-                          placeholder="Optional audit note before Flag/Dismiss..."
-                          aria-label="Similarity review note"
-                          className="rounded border border-[#AEAC78]/40 bg-[#241F1C] px-2 py-0.5 text-[11px] text-[#FCF0DA] placeholder-[#AEAC78]/60 focus:outline-none focus:ring-1 focus:ring-[#F2C46A] w-56"
-                        />
-                        {onSelectSubmissions && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                onSelectSubmissions(comp.submission_a_id, comp.submission_b_id)
-                              }
-                              className="rounded bg-[#F2C46A] px-2 py-0.5 font-mono text-[10px] font-bold text-[#4C4541] hover:bg-[#F2C46A]/90 cursor-pointer"
-                            >
-                              Open #{comp.submission_a_id} in Grading
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                onSelectSubmissions(comp.submission_b_id, comp.submission_a_id)
-                              }
-                              className="rounded bg-[#AEAC78] px-2 py-0.5 font-mono text-[10px] font-bold text-[#241F1C] hover:bg-[#AEAC78]/90 cursor-pointer"
-                            >
-                              Open #{comp.submission_b_id} in Grading
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {diffCodes.loading ? (
-                      <div className="p-6 text-center font-mono text-xs text-[#AEAC78]">
-                        Loading side-by-side student implementations...
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-[#AEAC78]/25 max-h-80 overflow-y-auto font-mono text-[11px]">
-                        {/* Left Pane: Submission A */}
-                        <div className="p-2.5 overflow-x-auto">
-                          <div className="mb-1.5 pb-1 border-b border-[#AEAC78]/20 flex items-center justify-between text-[10px] text-[#F2C46A] font-bold">
-                            <span>{getSubmissionLabel(comp.submission_a_id)}</span>
-                            <span>Left Candidate</span>
-                          </div>
-                          {diffCodes.codeA.split('\n').map((line, idx) => {
-                            const lineNo = idx + 1;
-                            const matched = isLineInRegions(lineNo, 'a') && line.trim().length > 0;
-                            return (
-                              <div
-                                key={lineNo}
-                                className={`flex items-start gap-2 px-1.5 py-0.5 rounded-xs ${
-                                  matched
-                                    ? 'bg-rose-500/20 border-l-2 border-rose-400'
-                                    : 'border-l-2 border-transparent opacity-80'
-                                }`}
-                              >
-                                <span className="w-5 text-right select-none text-[10px] text-[#AEAC78]/70">
-                                  {lineNo}
-                                </span>
-                                <span className="whitespace-pre text-[#FCF0DA]">{line || ' '}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Right Pane: Submission B */}
-                        <div className="p-2.5 overflow-x-auto">
-                          <div className="mb-1.5 pb-1 border-b border-[#AEAC78]/20 flex items-center justify-between text-[10px] text-[#F2C46A] font-bold">
-                            <span>{getSubmissionLabel(comp.submission_b_id)}</span>
-                            <span>Right Candidate</span>
-                          </div>
-                          {diffCodes.codeB.split('\n').map((line, idx) => {
-                            const lineNo = idx + 1;
-                            const matched = isLineInRegions(lineNo, 'b') && line.trim().length > 0;
-                            return (
-                              <div
-                                key={lineNo}
-                                className={`flex items-start gap-2 px-1.5 py-0.5 rounded-xs ${
-                                  matched
-                                    ? 'bg-rose-500/20 border-l-2 border-rose-400'
-                                    : 'border-l-2 border-transparent opacity-80'
-                                }`}
-                              >
-                                <span className="w-5 text-right select-none text-[10px] text-[#AEAC78]/70">
-                                  {lineNo}
-                                </span>
-                                <span className="whitespace-pre text-[#FCF0DA]">{line || ' '}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             );
           })
         )}
       </div>
+
+      <SimilarityCompareModal
+        isOpen={modalCompId !== null}
+        comparison={comparisons.find((c) => c.id === modalCompId) ?? null}
+        codeA={diffCodes.codeA}
+        codeB={diffCodes.codeB}
+        loading={diffCodes.loading}
+        submissions={submissions}
+        initialNote={modalCompId !== null ? draftNotes[modalCompId] ?? '' : ''}
+        actionLoading={modalCompId !== null && actionLoading === modalCompId}
+        onClose={() => setModalCompId(null)}
+        onReview={async (compId, status, notes) => {
+          setDraftNotes((prev) => ({ ...prev, [compId]: notes }));
+          await handleReview(compId, status, notes);
+        }}
+        onSelectSubmissions={onSelectSubmissions}
+      />
     </div>
   );
 };

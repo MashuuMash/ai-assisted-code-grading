@@ -1,66 +1,148 @@
-# AI-assisted code grading
+# VeriPie - AI-Assisted Python Code Grading Workstation
 
-Ứng dụng hỗ trợ giảng viên nhận bài Python, chạy test trong Docker, lưu minh chứng chấm điểm, xem tín hiệu tương đồng mã và xuất bảng điểm CSV. Phần phát hiện mã do AI tạo chỉ là **tín hiệu thử nghiệm**, không phải kết luận về tác giả.
+VeriPie is an academic workstation that helps university instructors and teaching assistants ingest Python programming submissions, run automated `pytest` suites inside isolated Docker containers, extract deterministic code-quality and similarity evidence, synthesize evidence-grounded AI feedback drafts, and export confirmed CSV gradebooks.
 
-## Chạy trên Windows với Docker Desktop
+> **Core Philosophy: Evidence First - AI Second - Human Decision Last.**  
+> Automated rubric scores are deterministic (`0.0` variance), AI feedback is strictly grounded in extracted `evidence_id` tags, and AI-generated code detection is surfaced purely as an **experimental advisory signal** rather than proof of authorship.
 
-1. Khởi động Docker Desktop. Cài JPlag 6.2.0 (tùy chọn) bằng PowerShell: `./scripts/setup_jplag.ps1`. Script kiểm tra SHA256 của JAR tải từ trang phát hành chính thức. Nếu không cài JPlag, hệ thống dùng bộ so sánh token winnowing và hiển thị rõ engine trong báo cáo.
-2. Chạy `docker compose up --build -d`. API ở `http://localhost:8000`, tài liệu API ở `http://localhost:8000/docs`.
-3. Trong thư mục `frontend`, chạy `npm ci` rồi `npm run dev` để mở giao diện Vite.
+---
 
-Compose dùng PostgreSQL 16 và tự áp dụng migration khi backend khởi động. **Không xóa volume PostgreSQL cũ để sửa lỗi khởi động.** Nếu volume đã được tạo bởi PostgreSQL 15, hãy sao lưu và nâng cấp dữ liệu đúng quy trình, hoặc dùng tên Compose project riêng cho một môi trường thử nghiệm trống (ví dụ `docker compose -p grading_demo up --build -d`). Tên project riêng tạo volume riêng, không chuyển dữ liệu cũ sang.
+## Key Capabilities
 
-Để thử luồng tích hợp trên **môi trường dùng một lần** (script sẽ tạo tài khoản, lớp, bài tập và bài nộp trong database):
+- **Authentication & Account Security**:
+  - Role-based JWT authentication (`admin`, `lecturer`, `student`) with Argon2/Bcrypt password hashing.
+  - 6-digit HMAC-SHA256 Email OTP verification and Forgot/Reset Password flow via Google SMTP with HTML email templates.
+  - Strict username (`3-32` chars, lowercase alphanumeric/dot/underscore) and password strength (`8-72` chars with uppercase, lowercase, digit, and symbol) validation.
+  - Account Settings modal for updating display name and changing passwords.
+- **Course, Cohort & Rubric Management**:
+  - Structured hierarchy: `Course -> Class Cohort -> Assignment` with starter `base_code`, deadlines, and public/hidden `pytest` test cases.
+  - Weighted rubric builder (criteria weights summing to `100%`) with template presets and immutability guards once grades exist.
+- **Isolated Sandbox Execution & Evidence Extraction**:
+  - Ephemeral Docker-out-of-Docker execution (`grading-sandbox:latest`) with `--network none`, `256m` memory cap, `1.0` CPU, `64` PIDs limit, and `10s` timeout.
+  - Deterministic static analysis via Python `ast` (cyclomatic complexity, nesting depth) and `ruff`.
+- **Similarity & AI Signals**:
+  - Structural similarity detection via **JPlag 6.2.0** (Java 21) with starter `base_code` subtraction and automatic Winnowing token fallback.
+  - Optional fine-tuned **CodeBERT** AI-style probability signal with heuristic fallback.
+- **Grounded AI Feedback & 1-Click Live Demo**:
+  - Feedback drafting via Google Gemini (`gemini-2.5-flash`) or OpenAI-compatible API, strictly citing verified `evidence_id` tags, with deterministic rule-based fallback.
+  - Interactive 1-Click Live Demo mode on the Showcase Landing Page.
 
+---
+
+## Architecture Overview
+
+| Layer | Technology |
+| :--- | :--- |
+| **Frontend** | React 19, TypeScript, Vite 8, Tailwind CSS v4, Lucide React |
+| **Backend API** | FastAPI, SQLAlchemy 2.0 ORM, Alembic, Pydantic v2, PyJWT, pwdlib |
+| **Database** | PostgreSQL 16 (production), SQLite in-memory (unit tests) |
+| **Worker & Sandbox** | Python queue worker (`app.worker`) + Docker (`grading-sandbox:latest`) |
+| **Analysis & AI** | `pytest`, `ruff`, `ast`, JPlag 6.2.0 (Java 21), PyTorch/Transformers (CodeBERT), Google `google-genai` |
+| **CI/CD & Hosting** | GitHub Actions (`.github/workflows/ci-cd.yml`), Docker Compose, Nginx + Certbot HTTPS |
+
+For a complete technical breakdown, database schema, API routes, and verified benchmark numbers, see [`REPORT.txt`](REPORT.txt).
+
+---
+
+## Quick Start (Local Development with Docker)
+
+### Prerequisites
+- Docker & Docker Compose
+- Node.js 22+ (for local frontend development)
+- Optional: Java 21+ / PowerShell to download JPlag 6.2.0
+
+### 1. Configure Environment & Optional JPlag
+```bash
+cp .env.example .env
+```
+Edit `.env` to set `SECRET_KEY`, `GEMINI_API_KEY`, and `SMTP_*` credentials if testing email OTP delivery.
+
+*(Optional)* Download JPlag 6.2.0 (verified by SHA-256) on Windows PowerShell:
 ```powershell
+./scripts/setup_jplag.ps1
+```
+Or on Linux/macOS:
+```bash
+mkdir -p tools
+curl -fL "https://github.com/jplag/JPlag/releases/download/v6.2.0/jplag-6.2.0-jar-with-dependencies.jar" -o tools/jplag-6.2.0.jar
+```
+If JPlag is omitted, the platform automatically falls back to the built-in Winnowing token similarity engine.
+
+### 2. Start Backend, Worker, Sandbox & PostgreSQL
+```bash
+docker compose up --build -d
+```
+- Backend API: `http://localhost:8000`
+- Interactive API Docs: `http://localhost:8000/docs`
+- Health Check: `http://localhost:8000/health`
+
+The backend automatically waits for PostgreSQL 16 and applies Alembic migrations on startup. Do not delete existing PostgreSQL volumes unless intentionally resetting data.
+
+### 3. Start the Frontend
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+Open `http://localhost:3000` (or the Vite URL printed in the terminal).
+
+### 4. Optional Smoke Test (Disposable Environment)
+To run an end-to-end Compose integration check on an isolated project stack (requires JPlag JAR):
+```powershell
+docker compose -p grading_demo up --build -d
 docker compose -p grading_demo exec -e SMOKE_ALLOW_WRITE=1 backend python smoke_compose.py
 ```
+Do not run `smoke_compose.py` against a production database.
 
-Script smoke hiện yêu cầu JPlag và xác nhận báo cáo thực sự do JPlag tạo. Không chạy script này trên database thật.
-Sau khi script báo `PASS`, nó in tên đăng nhập và mật khẩu ngẫu nhiên của giảng viên demo; dùng thông tin đó tại `http://localhost:3000`. Nút/tài khoản `lecturer` trong các bản cũ chỉ tồn tại trong test, không được tự tạo bởi Compose. Không chia sẻ hoặc dùng lại mật khẩu demo bên ngoài máy thử nghiệm.
+---
 
-Trên giao diện, tab **Set Up Course & Class** cho phép tạo môn, lớp và bài tập. Sau khi tạo bài tập, mở tab **Rubric & Formulas** để tạo rubric mẫu hoặc rubric riêng; có thể chỉnh tiêu chí và trọng số trước khi bắt đầu chấm. Khi bài đã có điểm, hệ thống chặn thay đổi tiêu chí/điểm tối đa để bảo toàn điểm đã lưu.
+## Production Deployment & CI/CD
 
-Tab **Assignment & Tests** cho phép sửa đề, hướng dẫn, starter code, trạng thái, hạn nộp và thêm/sửa/xóa test public/hidden. Test đã có kết quả không được xóa hoặc đổi visibility để giữ lịch sử; có thể sửa nội dung rồi chấm lại. Trong tab chấm bài, **Rerun grading** tạo lượt chấm mới, giữ lịch sử và đưa điểm về draft để giảng viên duyệt lại. Khi lượt chấm còn chạy, hệ thống chặn lưu/xác nhận điểm.
+The repository includes a GitHub Actions workflow at `.github/workflows/ci-cd.yml`:
+1. **CI (`ci` job)**: Runs on every push to `main` / `V1.2` and pull requests to `main`:
+   - Zero-emoji check (`python scripts/check_no_emoji.py`)
+   - Backend lint (`ruff check backend scripts`)
+   - Backend unit tests (`pytest -m "not docker and not jplag"`)
+   - Frontend lint (`npm run lint`) and production build (`npm run build`)
+2. **CD (`deploy` job)**: Runs on pushes to `main` (or manual `workflow_dispatch`) when `VPS_HOST`, `VPS_USER`, and `VPS_PASSWORD` repository secrets are configured:
+   - Pulls `main` on the Linux VM, rebuilds `frontend/dist` for Nginx, rebuilds/restarts Docker Compose services without touching database volumes, and verifies `/health`.
 
-Backend đợi database sẵn sàng trước khi chạy migration. PostgreSQL chỉ mở trong mạng Compose; API mặc định chỉ bind localhost. Đặt `$env:BACKEND_PORT = '8001'` nếu cần một stack thử nghiệm riêng chạy song song. Backend không còn tự reload; sau sửa Python, chạy `docker compose -p grading_demo restart backend worker`.
+---
 
-## Kiểm thử
+## Testing & Quality Checks
 
-```powershell
-docker build -t grading-sandbox:latest ./sandbox
-cd backend
-$env:DEBUG = 'false'
-../.venv/Scripts/python.exe -m pytest -q
-../.venv/Scripts/python.exe -m ruff check .
-cd ../frontend
+### Backend & Static Checks
+```bash
+python scripts/check_no_emoji.py
+ruff check backend scripts
+cd backend && pytest -m "not docker and not jplag" -q
+```
+*(Docker and JPlag integration tests require the `grading-sandbox:latest` image and `tools/jplag-6.2.0.jar` respectively.)*
+
+### Frontend Build & Lint
+```bash
+cd frontend
 npm ci
-npm run build
 npm run lint
+npm run build
 ```
 
-Kiểm thử trình duyệt thật bằng Playwright (tự sinh ZIP mẫu, tạo môn/lớp/bài mới; chỉ dùng database thử nghiệm):
-
+### Playwright End-to-End Tests
 ```powershell
-# Từ thư mục gốc: khởi động stack riêng trên cổng 8001
+# Start an isolated backend stack on port 8001 if testing against live API
 $env:BACKEND_PORT = '8001'
 docker compose -p grading_e2e up --build -d
-docker compose -p grading_e2e exec -e SMOKE_ALLOW_WRITE=1 backend python smoke_compose.py
 cd frontend
 npx playwright install chromium
-$env:E2E_USERNAME = '<username từ smoke test>'
-$env:E2E_PASSWORD = '<password từ smoke test>'
 npm run test:e2e
-Remove-Item Env:E2E_PASSWORD
 Remove-Item Env:BACKEND_PORT
 ```
+Playwright screenshots and traces on failure are saved to `frontend/test-results/` (gitignored).
 
-Playwright tự mở Vite trên cổng 3001, nối API 8001, kiểm tra đăng nhập → tạo workspace → sửa đề/test → nhập ZIP → chấm/xác nhận → đổi test/chấm lại → xuất CSV. Ảnh nằm tại `frontend/test-results/workstation-success.png`; khi lỗi có screenshot và trace. Không đưa thư mục test-results hay mật khẩu vào Git. Kiểm thử này chưa thay thế đánh giá bằng bài sinh viên thật.
+---
 
-Các bài test tích hợp Docker/JPlag tự bỏ qua nếu thiếu Docker image hoặc JAR. Việc bỏ qua test không chứng minh hai tính năng đó đã hoạt động; hãy chạy smoke test trên Compose để xác nhận toàn luồng.
+## Honest Limitations
 
-## Giới hạn cần trình bày trung thực
-
-- Chưa có tập bài nộp thật hoặc đánh giá của giảng viên; các kết quả hiện tại là kiểm thử kỹ thuật trên dữ liệu mẫu, chưa phải chứng cứ về độ chính xác sư phạm.
-- Chỉ cấu hình `AI_DETECTOR_MODEL_PATH` khi có checkpoint phân loại đã fine-tune với nhãn `human` và `ai_generated`. Không cần fine-tune CodeBERT để hoàn thiện luồng chấm bài chính. Khi chưa có mô hình hợp lệ, điểm phong cách AI chỉ là heuristic mang tính tham khảo.
-- JPlag phát hiện tương đồng, không tự kết luận đạo văn. Giảng viên cần xem ngữ cảnh, đề bài và phần mã được đánh dấu.
+- **No Classroom Field Trial Yet**: All current evaluations and benchmarks reflect technical verification on curated/synthetic datasets and automated E2E suites rather than a live university grading study.
+- **Advisory AI Detection**: Without a task-specific fine-tuned checkpoint at `AI_DETECTOR_MODEL_PATH`, AI-style detection uses a heuristic fallback; even with CodeBERT enabled, scores are advisory only and must not be treated as proof of authorship.
+- **Similarity vs. Plagiarism**: JPlag and Winnowing detect structural/token overlap, not intent. Instructors must always review highlighted code comparisons alongside the prompt and starter code.

@@ -69,15 +69,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [token]);
 
   const login = async (username_or_email: string, password: string) => {
-    setIsLoading(true);
-    try {
-      const res = await api.auth.loginJson(username_or_email, password);
-      setTokenState(res.access_token);
-      const u = await api.auth.getMe();
-      setUser(u);
-    } finally {
-      setIsLoading(false);
-    }
+    const res = await api.auth.loginJson(username_or_email, password);
+    setTokenState(res.access_token);
+    const u = await api.auth.getMe();
+    setUser(u);
   };
 
   const register = async (payload: RegisterInput): Promise<User> => {
@@ -92,15 +87,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const verifyOtp = async (email_or_username: string, otp_code: string): Promise<void> => {
-    setIsLoading(true);
-    try {
-      const res = await api.auth.verifyOtp(email_or_username, otp_code);
-      setTokenState(res.access_token);
-      const u = await api.auth.getMe();
-      setUser(u);
-    } finally {
-      setIsLoading(false);
-    }
+    const res = await api.auth.verifyOtp(email_or_username, otp_code);
+    setTokenState(res.access_token);
+    const u = await api.auth.getMe();
+    setUser(u);
   };
 
   const resendOtp = async (email_or_username: string): Promise<OtpResendResponse> => {
@@ -116,20 +106,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     otp_code: string,
     new_password: string
   ): Promise<void> => {
-    setIsLoading(true);
-    try {
-      const res = await api.auth.resetPassword({
-        email_or_username,
-        otp_code,
-        new_password,
-      });
-      if (res.access_token) {
-        setTokenState(res.access_token);
-        const u = await api.auth.getMe();
-        setUser(u);
-      }
-    } finally {
-      setIsLoading(false);
+    const res = await api.auth.resetPassword({
+      email_or_username,
+      otp_code,
+      new_password,
+    });
+    if (res.access_token) {
+      setTokenState(res.access_token);
+      const u = await api.auth.getMe();
+      setUser(u);
     }
   };
 

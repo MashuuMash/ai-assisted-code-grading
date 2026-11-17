@@ -377,6 +377,26 @@ def test_batch_generate_feedback_api(
     assert batch_data["generated_count"] == 2
     assert batch_data["failed_count"] == 0
 
+    # Confirm sub1, then re-run batch generate -> sub1 must be preserved as skipped_confirmed
+    from app.models import GradeStatus, SubmissionGrade
+
+    grade1 = db.query(SubmissionGrade).filter(SubmissionGrade.submission_id == sub1.id).first()
+    assert grade1 is not None
+    grade1.status = GradeStatus.CONFIRMED
+    grade1.feedback_summary = "Instructor locked summary"
+    db.commit()
+
+    res_batch2 = client.post(
+        f"{base_url}/submissions/batch-generate-feedback",
+        headers=auth_headers(lecturer_token),
+    )
+    assert res_batch2.status_code == 200
+    batch2 = res_batch2.json()
+    assert batch2["generated_count"] == 1
+    assert any(r["submission_id"] == sub1.id and r["status"] == "skipped_confirmed" for r in batch2["results"])
+    db.refresh(grade1)
+    assert grade1.feedback_summary == "Instructor locked summary"
+
 
 def test_feedback_model_override_validation():
     """Verify malicious or invalid model_override values are rejected by schema validation."""

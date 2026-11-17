@@ -1,11 +1,14 @@
+import hashlib
 import io
 import logging
 import re
 import zipfile
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Tuple
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import GradingJob, GradingJobStatus, Submission
@@ -158,7 +161,12 @@ def ingest_batch_zip(
             storage_mgr = storage or SubmissionStorage()
             submissions_created: list[BatchUploadItem] = []
             errors: list[str] = []
+            skipped: list[str] = []
+            imported_count = 0
+            updated_count = 0
+            skipped_count = 0
             total_found = 0
+            seen_in_batch: dict[str, Submission] = {}
 
             for info in zf.infolist():
                 if info.is_dir():
@@ -188,25 +196,86 @@ def ingest_batch_zip(
                     continue
 
                 meta = parse_submission_metadata(clean_path)
+                content_sha256 = hashlib.sha256(file_content).hexdigest()
 
-                try:
-                    saved = storage_mgr.store_bytes(file_content, meta.clean_filename)
-                except Exception as exc:
-                    errors.append(f"Storage failed for {info.filename}: {exc}")
-                    continue
+                existing = seen_in_batch.get(meta.student_identifier)
+                if existing is None and meta.student_identifier:
+                    existing = db.scalar(
+                        select(Submission)
+                        .where(
+                            Submission.assignment_id == assignment_id,
+                            Submission.student_identifier == meta.student_identifier,
+                        )
+                        .order_by(Submission.submitted_at.desc())
+                    )
 
-                sub = Submission(
-                    assignment_id=assignment_id,
-                    student_id=None,
-                    student_identifier=meta.student_identifier,
-                    student_name=meta.student_name,
-                    original_filename=meta.clean_filename,
-                    storage_key=saved.storage_key,
-                    size_bytes=saved.size_bytes,
-                    sha256=saved.sha256,
-                )
-                db.add(sub)
-                db.flush()
+                if existing is not None:
+                    if existing.sha256 == content_sha256:
+                        skipped_count += 1
+                        skipped.append(
+                            f"{meta.student_identifier} ({meta.clean_filename}): Duplicate unchanged file skipped"
+                        )
+                        submissions_created.append(
+                            BatchUploadItem(
+                                submission_id=existing.id,
+                                student_identifier=meta.student_identifier,
+                                student_name=meta.student_name or existing.student_name,
+                                filename=meta.clean_filename,
+                                size_bytes=existing.size_bytes,
+                                job_id=None,
+                                action="skipped",
+                            )
+                        )
+                        continue
+
+                    try:
+                        saved = storage_mgr.store_bytes(file_content, meta.clean_filename)
+                    except Exception as exc:
+                        errors.append(f"Storage failed for {info.filename}: {exc}")
+                        continue
+
+                    old_key = existing.storage_key
+                    existing.original_filename = meta.clean_filename
+                    existing.storage_key = saved.storage_key
+                    existing.size_bytes = saved.size_bytes
+                    existing.sha256 = saved.sha256
+                    if meta.student_name:
+                        existing.student_name = meta.student_name
+                    existing.submitted_at = datetime.now(timezone.utc)
+                    db.flush()
+                    if old_key != saved.storage_key:
+                        still_used = db.scalar(
+                            select(Submission.id).where(Submission.storage_key == old_key).limit(1)
+                        )
+                        if still_used is None:
+                            storage_mgr.delete(old_key)
+                    sub = existing
+                    action = "updated"
+                    updated_count += 1
+                else:
+                    try:
+                        saved = storage_mgr.store_bytes(file_content, meta.clean_filename)
+                    except Exception as exc:
+                        errors.append(f"Storage failed for {info.filename}: {exc}")
+                        continue
+
+                    sub = Submission(
+                        assignment_id=assignment_id,
+                        student_id=None,
+                        student_identifier=meta.student_identifier,
+                        student_name=meta.student_name,
+                        original_filename=meta.clean_filename,
+                        storage_key=saved.storage_key,
+                        size_bytes=saved.size_bytes,
+                        sha256=saved.sha256,
+                    )
+                    db.add(sub)
+                    db.flush()
+                    action = "imported"
+                    imported_count += 1
+
+                if meta.student_identifier:
+                    seen_in_batch[meta.student_identifier] = sub
 
                 job_id = None
                 if auto_queue:
@@ -226,6 +295,7 @@ def ingest_batch_zip(
                         filename=meta.clean_filename,
                         size_bytes=saved.size_bytes,
                         job_id=job_id,
+                        action=action,
                     )
                 )
 
@@ -233,10 +303,13 @@ def ingest_batch_zip(
 
             return BatchUploadResponse(
                 total_found=total_found,
-                imported_count=len(submissions_created),
+                imported_count=imported_count,
+                updated_count=updated_count,
+                skipped_count=skipped_count,
                 failed_count=len(errors),
                 submissions=submissions_created,
                 errors=errors,
+                skipped=skipped,
             )
 
     except zipfile.BadZipFile:

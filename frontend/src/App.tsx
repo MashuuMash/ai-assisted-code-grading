@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ShowcaseLandingPage } from './pages/ShowcaseLandingPage';
+import { AdminDashboard } from './pages/AdminDashboard';
 import { WorkstationDashboard } from './pages/WorkstationDashboard';
 import { api, DemoSeedResponse, setToken } from './api/client';
 import { demoSeedResponse } from './data/demoFixtures';
@@ -97,6 +98,10 @@ const AppContent: React.FC = () => {
 
   if (!user) {
     return <ShowcaseLandingPage onLaunchDemo={handleLaunchDemo} />;
+  }
+
+  if (user.role === 'admin') {
+    return <AdminDashboard />;
   }
 
   return <WorkstationDashboard onExitDemo={handleExitDemo} />;

@@ -131,3 +131,76 @@ def test_batch_ingestion_invalid_zip(db):
             assignment_id=1,
             archive_bytes=b"not-a-zip-file-content",
         )
+
+
+def test_batch_ingestion_duplicate_skip_and_update(db, tmp_path):
+    from app.models import Assignment, AssignmentStatus, Cohort, Course, User, UserRole
+    from app.submission_storage import SubmissionStorage
+
+    lecturer = User(
+        email="dup_lec@example.com",
+        username="dup_lec",
+        hashed_password="x",
+        full_name="Dup Lecturer",
+        role=UserRole.LECTURER,
+    )
+    db.add(lecturer)
+    db.flush()
+
+    course = Course(code="CS102-DUP", name="Dup Test", instructor_id=lecturer.id)
+    db.add(course)
+    db.flush()
+
+    cohort = Cohort(code="C2", name="Class B", semester="Fall", year=2026, course_id=course.id)
+    db.add(cohort)
+    db.flush()
+
+    assignment = Assignment(class_id=cohort.id, title="HW2", status=AssignmentStatus.PUBLISHED)
+    db.add(assignment)
+    db.commit()
+
+    storage = SubmissionStorage()
+
+    # First upload: 2 students
+    zip1 = io.BytesIO()
+    with zipfile.ZipFile(zip1, "w") as zf:
+        zf.writestr("523H0001.py", "def add(a, b): return a + b\n")
+        zf.writestr("523H0002.py", "def add(a, b): return a + b + 0\n")
+
+    resp1 = ingest_batch_zip(
+        db=db,
+        assignment_id=assignment.id,
+        archive_bytes=zip1.getvalue(),
+        auto_queue=True,
+        storage=storage,
+    )
+    assert resp1.imported_count == 2
+    assert resp1.updated_count == 0
+    assert resp1.skipped_count == 0
+
+    # Second upload: 523H0001 unchanged (skipped), 523H0002 modified (updated), 523H0003 new (imported)
+    zip2 = io.BytesIO()
+    with zipfile.ZipFile(zip2, "w") as zf:
+        zf.writestr("523H0001.py", "def add(a, b): return a + b\n")
+        zf.writestr("523H0002.py", "def add(a, b):\n    return a + b\n")
+        zf.writestr("523H0003.py", "def add(a, b): return sum([a, b])\n")
+
+    resp2 = ingest_batch_zip(
+        db=db,
+        assignment_id=assignment.id,
+        archive_bytes=zip2.getvalue(),
+        auto_queue=True,
+        storage=storage,
+    )
+    assert resp2.total_found == 3
+    assert resp2.imported_count == 1
+    assert resp2.updated_count == 1
+    assert resp2.skipped_count == 1
+    assert len(resp2.skipped) == 1
+    assert "523H0001" in resp2.skipped[0]
+
+    subs = list(db.query(Submission).filter(Submission.assignment_id == assignment.id).all())
+    assert len(subs) == 3
+    jobs = list(db.query(GradingJob).all())
+    # 2 initial + 1 updated + 1 new = 4 jobs (skipped 523H0001 did NOT create a new job)
+    assert len(jobs) == 4
